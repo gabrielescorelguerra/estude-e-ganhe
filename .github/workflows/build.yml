@@ -38,14 +38,14 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx cap sync android
-      - name: Compilar APK (debug, assinado com a chave de debug: instalável direto)
+      - name: 'Compilar APK (debug, instalável direto)'
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
       - name: Renomear
         run: cp android/app/build/outputs/apk/debug/app-debug.apk estude-e-ganhe.apk
       - uses: actions/upload-artifact@v4
         with: { name: estude-e-ganhe-apk, path: estude-e-ganhe.apk }
-      - name: Publicar na release "apk-latest" (link fixo para baixar)
+      - name: 'Publicar na release apk-latest'
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
