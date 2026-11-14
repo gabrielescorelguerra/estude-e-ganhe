@@ -1,5 +1,5 @@
 import type { Election, Round, StrategyConfig, Tally } from './types';
-import { addTallies, officialTally, studyTally, sum } from './tally';
+import { addTallies, officialTally, oppTally, studyTally, sum } from './tally';
 import type { Campaign } from './types';
 
 export interface Placement {
@@ -33,13 +33,13 @@ export interface StrategyCtx {
   round: Round;
   focusNr: number;
   /** alocações atuais (para "virar estados" saber o que já foi gasto) */
-  campaign: Pick<Campaign, 'allocations'>;
+  campaign: Pick<Campaign, 'allocations'> & Partial<Pick<Campaign, 'opposition'>>;
 }
 
 function ufTallies(ctx: StrategyCtx): Record<string, Tally> {
   const out: Record<string, Tally> = {};
   for (const p of ctx.election.places) {
-    out[p.id] = addTallies(officialTally(ctx.election, ctx.round, p.id), studyTally(ctx.campaign, p.id));
+    out[p.id] = addTallies(addTallies(officialTally(ctx.election, ctx.round, p.id), studyTally(ctx.campaign, p.id)), oppTally({ opposition: ctx.campaign.opposition ?? {} }, p.id));
   }
   return out;
 }

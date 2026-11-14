@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { geoMercator, geoPath } from 'd3-geo';
 import type { Election, Tally } from '../../core/types';
-import { addTallies, fmtPct, officialTally, studyTally, winnerOf, sum } from '../../core';
+import { addTallies, fmtPct, officialTally, oppTally, studyTally, winnerOf, sum } from '../../core';
 import { loadMunGeo, loadMunVotes, loadUfGeo, type GeoFC, type MunRow } from '../../data/loader';
 import type { Game } from '../../state/useGame';
 import { useUi, type MapMode } from '../../state/store';
@@ -61,11 +61,12 @@ export function BrazilMap({ election, game }: Props) {
 
   // tallies por UF
   const ufTally = useMemo(() => {
-    const out: Record<string, { off: Tally; study: Tally; sim: Tally }> = {};
+    const out: Record<string, { off: Tally; study: Tally; opp: Tally; sim: Tally }> = {};
     for (const p of election.places) {
       const off = officialTally(election, campaign.round, p.id);
       const study = studyTally(campaign, p.id);
-      out[p.id] = { off, study, sim: addTallies(off, study) };
+      const opp = oppTally(campaign, p.id);
+      out[p.id] = { off, study, opp, sim: addTallies(addTallies(off, study), opp) };
     }
     return out;
   }, [election, campaign]);
@@ -108,7 +109,7 @@ export function BrazilMap({ election, game }: Props) {
 
   const flipped = (id: string) => {
     const t = ufTally[id];
-    return !!t && sum(t.study) > 0 && winnerOf(t.sim)?.nr !== winnerOf(t.off)?.nr;
+    return !!t && sum(t.study) + sum(t.opp) > 0 && winnerOf(t.sim)?.nr !== winnerOf(t.off)?.nr;
   };
 
   return (

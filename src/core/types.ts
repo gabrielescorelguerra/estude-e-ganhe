@@ -75,7 +75,25 @@ export interface Campaign {
   /** alocações: chave `${lugar}|${nr}` -> votos. lugar = UF, "ZZ" ou código IBGE (município) */
   allocations: Record<string, number>;
   strategy: StrategyConfig;
-  status: 'ativa' | 'vencida' | 'expirada';
+  status: 'ativa' | 'vencida' | 'derrota';
+  /** oposição ativa: minutos de meta não cumpridos viram votos do adversário */
+  penalty: boolean;
+  /** votos do adversário (mesma chave de `allocations`); gerados pelo app, o jogador não edita */
+  opposition: Record<string, number>;
+  /** último dia (inclusive) já apurado */
+  settledThrough: string;
+  /** última folga usada (1 por janela de 7 dias) */
+  lastFreeDay: string | null;
+  losses: Loss[];
+}
+
+export interface Loss {
+  day: string;
+  shortMin: number;
+  votes: number;
+  /** dia de folga: sem votos para o adversário */
+  free: boolean;
+  rivalNr: number;
 }
 
 export interface Session {

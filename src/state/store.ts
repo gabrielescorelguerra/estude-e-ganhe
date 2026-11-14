@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { ActiveSession, Campaign, Session, StrategyConfig } from '../core/types';
+import type { ActiveSession, Campaign, Loss, Session, StrategyConfig } from '../core/types';
+import { addDays, dayKey } from '../core/plan';
 import { elapsedSeconds, isRunning, pauseSegments, resumeSegments, votesFor } from '../core/timer';
 import { allocKey, allocatedTotal } from '../core/tally';
 import type { Placement } from '../core/strategies';
@@ -26,7 +27,8 @@ interface Actions {
   deleteSession: (id: string) => void;
   setDailyGoal: (min: number) => void;
 
-  addCampaign: (c: Omit<Campaign, 'id' | 'createdAt' | 'allocations' | 'status' | 'strategy'> & Partial<Pick<Campaign, 'strategy'>>) => string;
+  addCampaign: (c: Omit<Campaign, 'id' | 'createdAt' | 'allocations' | 'status' | 'strategy' | 'opposition' | 'settledThrough' | 'lastFreeDay' | 'losses'> & Partial<Pick<Campaign, 'strategy'>>) => string;
+  settle: (campaignId: string, r: { losses: Loss[]; settledThrough: string; lastFreeDay: string | null }, placements: Placement[]) => void;
   selectCampaign: (id: string) => void;
   patchCampaign: (id: string, patch: Partial<Campaign>) => void;
   deleteCampaign: (id: string) => void;
@@ -90,10 +92,20 @@ export const useStore = create<Store>()(
         const id = uid();
         const camp: Campaign = {
           ...c, strategy: c.strategy ?? { kind: 'manual' }, id, createdAt: Date.now(), allocations: {}, status: 'ativa',
+          opposition: {}, losses: [], lastFreeDay: null, settledThrough: addDays(dayKey(Date.now()), -1),
         };
         set({ campaigns: [camp, ...get().campaigns], activeCampaignId: id });
         return id;
       },
+      settle: (campaignId, r, placements) =>
+        set({
+          campaigns: get().campaigns.map((c) => {
+            if (c.id !== campaignId) return c;
+            const opposition = { ...c.opposition };
+            for (const p of placements) opposition[allocKey(p.place, p.nr)] = (opposition[allocKey(p.place, p.nr)] ?? 0) + p.votes;
+            return { ...c, opposition, losses: [...r.losses, ...c.losses].slice(0, 200), settledThrough: r.settledThrough, lastFreeDay: r.lastFreeDay };
+          }),
+        }),
       selectCampaign: (id) => set({ activeCampaignId: id }),
       patchCampaign: (id, patch) =>
         set({ campaigns: get().campaigns.map((c) => (c.id === id ? { ...c, ...patch } : c)) }),
@@ -132,7 +144,18 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'estude-e-ganhe/v1',
-      version: 1,
+      version: 2,
+      migrate: (persisted) => {
+        const st = persisted as PersistedState;
+        const today = dayKey(Date.now());
+        st.campaigns = (st.campaigns ?? []).map((c) => ({
+          ...c,
+          penalty: c.penalty ?? false, opposition: c.opposition ?? {}, losses: c.losses ?? [], lastFreeDay: c.lastFreeDay ?? null,
+          settledThrough: c.settledThrough ?? addDays(today, -1),
+          status: (c.status as string) === 'expirada' ? 'derrota' : c.status,
+        }));
+        return st;
+      },
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         sessions: s.sessions, active: s.active, campaigns: s.campaigns,
@@ -162,7 +185,7 @@ interface UiState {
   select: (uf: string | null, mun?: string | null) => void;
   mode: MapMode;
   setMode: (m: MapMode) => void;
-  campaignModal: null | 'novo' | 'replanejar' | 'avancar' | 'estrategia' | 'vitoria';
+  campaignModal: null | 'novo' | 'replanejar' | 'avancar' | 'estrategia' | 'vitoria' | 'derrota';
   openCampaign: (m: UiState['campaignModal']) => void;
   summary: Session | null;
   setSummary: (s: Session | null) => void;

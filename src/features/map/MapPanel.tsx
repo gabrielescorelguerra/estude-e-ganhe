@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Election, Tally } from '../../core/types';
 import {
-  addTallies, allocKey, fmtCompact, fmtDuration, fmtInt, fmtPct, officialTally, parseAllocKey, studyTally, sum, winnerOf,
+  addTallies, allocKey, fmtCompact, fmtDuration, fmtInt, fmtPct, officialTally, oppTally, parseAllocKey, studyTally, sum, winnerOf,
 } from '../../core';
 import { loadMunVotes, type MunRow } from '../../data/loader';
 import type { Game } from '../../state/useGame';
@@ -28,8 +28,9 @@ function Country({ election, game }: { election: Election; game: Game }) {
   const rows = useMemo(() => election.places.map((p) => {
     const off = officialTally(election, c.round, p.id);
     const study = studyTally(c, p.id);
-    const sim = addTallies(off, study);
-    return { p, off, study, sim, w: winnerOf(sim), flipped: sum(study) > 0 && winnerOf(sim)?.nr !== winnerOf(off)?.nr };
+    const opp = oppTally(c, p.id);
+    const sim = addTallies(addTallies(off, study), opp);
+    return { p, off, study, sim, w: winnerOf(sim), flipped: sum(study) + sum(opp) > 0 && winnerOf(sim)?.nr !== winnerOf(off)?.nr };
   }), [election, c]);
 
   return (
@@ -40,7 +41,7 @@ function Country({ election, game }: { election: Election; game: Game }) {
       </div>
       <section className="sect">
         <div className="sect-title"><span className="caps">Resultado nacional</span><span style={{ display: 'flex', gap: 6 }}><Tag kind="official" /><Tag kind="study" /></span></div>
-        <ResultBars election={election} order={order} official={game.official} study={game.study} focusNr={c.focusNr} limit={c.round === 1 ? 5 : 2} />
+        <ResultBars election={election} order={order} official={game.official} study={game.study} opp={game.opp} focusNr={c.focusNr} limit={c.round === 1 ? 5 : 2} />
         <p className="small muted">
           Sólido: apuração oficial do TSE. Hachurado: votos fictícios do seu estudo.
           {game.goal.reached
@@ -88,7 +89,8 @@ function Place({ election, game, uf, mun }: { election: Election; game: Game; uf
     return officialTally(election, c.round, uf);
   }, [row, election, c.round, uf, order, ri]);
   const study = useMemo(() => studyTally(c, placeId), [c, placeId]);
-  const sim = addTallies(off, study);
+  const opp = useMemo(() => oppTally(c, placeId), [c, placeId]);
+  const sim = addTallies(addTallies(off, study), opp);
   const gap = flipGap(sim, c.focusNr);
   const w = winnerOf(sim);
   const title = row ? row[1] : place.name;
@@ -119,8 +121,8 @@ function Place({ election, game, uf, mun }: { election: Election; game: Game; uf
 
       <section className="sect">
         <div className="sect-title"><span className="caps">Resultado</span><span style={{ display: 'flex', gap: 6 }}><Tag kind="official" /><Tag kind="study" /></span></div>
-        <ResultBars election={election} order={order} official={off} study={study} focusNr={c.focusNr} limit={c.round === 1 ? 5 : 2} />
-        <p className="small faint">{fmtInt(sum(off))} votos oficiais{sum(study) > 0 && <> + <span className="study-text">{fmtInt(sum(study))} de estudo</span></>}</p>
+        <ResultBars election={election} order={order} official={off} study={study} opp={opp} focusNr={c.focusNr} limit={c.round === 1 ? 5 : 2} />
+        <p className="small faint">{fmtInt(sum(off))} votos oficiais{sum(study) > 0 && <> + <span className="study-text">{fmtInt(sum(study))} de estudo</span></>}{sum(opp) > 0 && <> + <span className="opp-text">{fmtInt(sum(opp))} da oposição</span></>}</p>
       </section>
 
       <section className="sect">

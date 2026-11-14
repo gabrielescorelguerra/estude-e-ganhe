@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Election } from './core/types';
-import { applyStrategy, elapsedSeconds, fmtClock, fmtInt, isRunning } from './core';
+import { applyStrategy, dayKey, elapsedSeconds, fmtClock, fmtInt, isRunning, secondsByDay, settleLosses, splitInt, sum, officialTally } from './core';
 import { loadElection } from './data/loader';
 import { useStore, useUi, type Tab } from './state/store';
 import { useGame } from './state/useGame';
@@ -9,7 +9,7 @@ import { useNow } from './features/timer/useNow';
 import { MapPage } from './features/map/MapPage';
 import { ProgressPage } from './features/progress/ProgressPage';
 import { CampaignSetup } from './features/campaign/CampaignSetup';
-import { StrategyModal, SummaryModal, VictoryModal } from './features/campaign/Modals';
+import { DefeatModal, StrategyModal, SummaryModal, VictoryModal } from './features/campaign/Modals';
 
 const TABS: [Tab, string][] = [['estudar', 'Estudar'], ['mapa', 'Mapa'], ['progresso', 'Progresso']];
 
@@ -33,7 +33,12 @@ export default function App() {
 function Shell({ election }: { election: Election }) {
   const { tab, setTab, campaignModal, openCampaign } = useUi();
   const game = useGame(election);
-  const { place, setStrategy, patchCampaign, campaigns } = useStore();
+  const { place, setStrategy, patchCampaign, campaigns, settle, sessions } = useStore();
+  const [today, setToday] = useState(() => dayKey(Date.now()));
+  useEffect(() => {
+    const id = setInterval(() => setToday(dayKey(Date.now())), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   // sem campanha: onboarding obrigatório
   useEffect(() => { if (campaigns.length === 0) openCampaign('novo'); }, [campaigns.length, openCampaign]);
@@ -48,6 +53,32 @@ function Shell({ election }: { election: Election }) {
     if (placements.length) place(c.id, placements);
     if (next !== strat) setStrategy(c.id, next);
   }, [wallet, strat, game, election, place, setStrategy]);
+
+  // oposição ativa: apura os dias encerrados e dá os votos do adversário
+  const camp = game?.campaign;
+  useEffect(() => {
+    if (!game || !camp || !camp.penalty || camp.status !== 'ativa' || camp.mode === 'livre') return;
+    if (game.goal.reached) return;
+    const mine = secondsByDay(sessions.filter((s) => s.campaignId === camp.id));
+    const r = settleLosses({
+      settledThrough: camp.settledThrough, today, deadline: camp.deadline, goalMin: camp.dailyGoalMin,
+      rate: camp.rate, rivalNr: game.goal.rivalNr, lastFreeDay: camp.lastFreeDay,
+      studiedSeconds: (d) => mine.get(d) ?? 0,
+    });
+    if (r.settledThrough === camp.settledThrough) return;
+    const total = r.losses.reduce((a, l) => a + l.votes, 0);
+    const places = election.places.map((p) => p.id);
+    const parts = total > 0 ? splitInt(total, places.map((id) => sum(officialTally(election, camp.round, id)))) : [];
+    settle(camp.id, r, places.map((id, i) => ({ place: id, nr: game.goal.rivalNr, votes: parts[i] ?? 0 })).filter((p) => p.votes > 0));
+  }, [camp, game, sessions, today, election, settle]);
+
+  // prazo encerrado sem o objetivo: derrota
+  const lost = game?.expired && game.campaign.status === 'ativa' && game.campaign.mode !== 'livre';
+  useEffect(() => {
+    if (!game || !lost) return;
+    patchCampaign(game.campaign.id, { status: 'derrota' });
+    openCampaign('derrota');
+  }, [lost, game, patchCampaign, openCampaign]);
 
   // objetivo atingido: marca a campanha e celebra uma única vez
   const reached = game?.goal.reached && game.campaign.status === 'ativa';
@@ -96,6 +127,7 @@ function Shell({ election }: { election: Election }) {
       )}
       {campaignModal === 'estrategia' && game && <StrategyModal game={game} />}
       {campaignModal === 'vitoria' && game && <VictoryModal election={election} game={game} />}
+      {campaignModal === 'derrota' && game && <DefeatModal election={election} game={game} />}
       <SummaryModal election={election} game={game} />
     </div>
   );

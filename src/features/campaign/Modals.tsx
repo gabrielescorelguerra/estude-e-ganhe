@@ -69,6 +69,29 @@ export function VictoryModal({ election, game }: { election: Election; game: Gam
   );
 }
 
+export function DefeatModal({ election, game }: { election: Election; game: Game }) {
+  const { openCampaign } = useUi();
+  const c = game.campaign;
+  const me = election.candidates[c.focusNr];
+  const rival = election.candidates[game.goal.rivalNr];
+  const lostMin = c.losses.reduce((a, l) => a + (l.free ? 0 : l.shortMin), 0);
+  const oppVotes = c.losses.reduce((a, l) => a + l.votes, 0);
+  return (
+    <Modal title="Prazo encerrado" onClose={() => openCampaign(null)}>
+      <p>
+        O prazo de {c.days} dias acabou e <b>{me.name}</b> não superou <b>{rival.name}</b>. Faltaram <b className="num">{fmtInt(game.goal.needed)}</b> votos.
+      </p>
+      {c.penalty && lostMin > 0 && (
+        <p className="small muted">Você deixou de cumprir a meta em {c.losses.filter((l) => !l.free).length} dias ({fmtDuration(lostMin * 60)} a menos), o que deu {fmtInt(oppVotes)} votos à oposição.</p>
+      )}
+      <div className="actions">
+        <button className="btn ghost" onClick={() => openCampaign('replanejar')}>Continuar com novo prazo</button>
+        <button className="btn" onClick={() => openCampaign('novo')}>Nova campanha</button>
+      </div>
+    </Modal>
+  );
+}
+
 export function SummaryModal({ election, game }: { election: Election; game: Game | null }) {
   const { summary, setSummary, setTab } = useUi();
   if (!summary) return null;

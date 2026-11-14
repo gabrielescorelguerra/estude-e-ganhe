@@ -27,6 +27,7 @@ export function CampaignSetup({ election, mode, game }: { election: Election; mo
   const [days, setDays] = useState(replan ? Math.max(7, Math.min(180, game!.daysLeft > 0 ? game!.daysLeft : 30)) : 30);
   const [minutes, setMinutes] = useState(replan ? prev!.dailyGoalMin : dailyGoalMin);
   const [marginPct, setMarginPct] = useState(replan ? prev!.marginPct || 2 : 2);
+  const [penalty, setPenalty] = useState(replan ? prev!.penalty : true);
   const [free, setFree] = useState(replan ? prev!.mode === 'livre' : false);
   const [freeRate, setFreeRate] = useState(replan && prev!.mode === 'livre' ? prev!.rate : FREE_RATE);
 
@@ -51,9 +52,9 @@ export function CampaignSetup({ election, mode, game }: { election: Election; mo
     const common = { days, deadline: addDays(dayKey(Date.now()), days), dailyGoalMin: minutes, marginPct: effMargin, rate, baseNeeded: goal.needed };
     setDailyGoal(minutes);
     if (replan) {
-      patchCampaign(prev!.id, { ...common, mode: free ? 'livre' : 'plano', status: 'ativa' });
+      patchCampaign(prev!.id, { ...common, mode: free ? 'livre' : 'plano', penalty: penalty && !free, status: 'ativa', settledThrough: addDays(dayKey(Date.now()), -1) });
     } else {
-      addCampaign({ electionId: election.id, round, focusNr, mode: free ? 'livre' : 'plano', ...common });
+      addCampaign({ electionId: election.id, round, focusNr, mode: free ? 'livre' : 'plano', penalty: penalty && !free, ...common });
     }
     openCampaign(null);
   };
@@ -128,6 +129,19 @@ export function CampaignSetup({ election, mode, game }: { election: Election; mo
             )}
           </div>
         </div>
+
+        {!free && (
+          <label className="sect" style={{ gridTemplateColumns: 'auto 1fr', alignItems: 'start', gap: 10, display: 'grid', cursor: 'pointer' }}>
+            <input type="checkbox" checked={penalty} onChange={(e) => setPenalty(e.target.checked)} style={{ marginTop: 4 }} />
+            <span>
+              <b>Oposição ativa</b>
+              <span className="small muted" style={{ display: 'block' }}>
+                Cada minuto da meta diária que você não estuda dá votos ao adversário: metade do que você ganharia (≈ {fmtInt(rate / 2)} por minuto).
+                Uma folga por semana, sem punição. Se o prazo acabar sem o objetivo, você perde.
+              </span>
+            </span>
+          </label>
+        )}
 
         <div className="plan" aria-live="polite">
           <span className="caps">Objetivo</span>

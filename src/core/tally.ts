@@ -41,6 +41,10 @@ export function studyTally(c: Pick<Campaign, 'allocations'>, placeId?: string): 
   return t;
 }
 
+export function oppTally(c: Pick<Campaign, 'opposition'>, placeId?: string): Tally {
+  return studyTally({ allocations: c.opposition ?? {} }, placeId);
+}
+
 export function addTallies(a: Tally, b: Tally): Tally {
   const r: Tally = { ...a };
   for (const [k, v] of Object.entries(b)) r[Number(k)] = (r[Number(k)] ?? 0) + v;

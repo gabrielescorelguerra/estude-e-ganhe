@@ -5,3 +5,4 @@ export * from './tally';
 export * from './timer';
 export * from './stats';
 export * from './strategies';
+export * from './penalty';

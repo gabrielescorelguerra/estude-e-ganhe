@@ -93,3 +93,24 @@ describe('stats', () => {
     expect(streak(m, 30, '2026-11-14')).toBe(2);
   });
 });
+
+import { settleLosses, penaltyVotes } from './penalty';
+describe('oposição', () => {
+  const base = { settledThrough: '2026-11-09', today: '2026-11-13', deadline: '2026-12-09', goalMin: 60, rate: 1000, rivalNr: 13, lastFreeDay: null as string | null };
+  it('primeira falta da semana é folga; a seguinte custa metade da taxa', () => {
+    const r = settleLosses({ ...base, studiedSeconds: (d) => (d === '2026-11-12' ? 3600 : 1800) });
+    // 10, 11, 12(cumprido), -> dias apurados: 10, 11, 12
+    expect(r.losses.map((l) => [l.day, l.free, l.votes])).toEqual([['2026-11-10', true, 0], ['2026-11-11', false, penaltyVotes(30, 1000)]]);
+    expect(penaltyVotes(30, 1000)).toBe(15000);
+    expect(r.settledThrough).toBe('2026-11-12');
+    expect(r.lastFreeDay).toBe('2026-11-10');
+  });
+  it('a folga volta depois de 7 dias', () => {
+    const r = settleLosses({ ...base, settledThrough: '2026-11-16', today: '2026-11-19', lastFreeDay: '2026-11-10', studiedSeconds: () => 0 });
+    expect(r.losses.map((l) => l.free)).toEqual([true, false]);
+  });
+  it('não apura dias depois do prazo e nem o dia de hoje', () => {
+    const r = settleLosses({ ...base, today: '2026-12-20', settledThrough: '2026-12-07', studiedSeconds: () => 0 });
+    expect(r.losses.every((l) => l.day <= '2026-12-09')).toBe(true);
+  });
+});

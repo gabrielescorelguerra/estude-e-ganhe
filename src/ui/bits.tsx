@@ -40,12 +40,12 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
  * A largura é a participação sobre o total simulado do lugar.
  */
 export function ResultBars({
-  election, order, official, study, focusNr, limit = 6,
+  election, order, official, study, opp = {}, focusNr, limit = 6,
 }: {
-  election: Election; order: number[]; official: Tally; study: Tally; focusNr?: number; limit?: number;
+  election: Election; order: number[]; official: Tally; study: Tally; opp?: Tally; focusNr?: number; limit?: number;
 }) {
-  const total = sum(official) + sum(study);
-  const ranked = rank(Object.fromEntries(order.map((nr) => [nr, (official[nr] ?? 0) + (study[nr] ?? 0)])));
+  const total = sum(official) + sum(study) + sum(opp);
+  const ranked = rank(Object.fromEntries(order.map((nr) => [nr, (official[nr] ?? 0) + (study[nr] ?? 0) + (opp[nr] ?? 0)])));
   const rows = ranked.slice(0, limit);
   if (focusNr !== undefined && !rows.some(([nr]) => nr === focusNr)) {
     const f = ranked.find(([nr]) => nr === focusNr);
@@ -56,7 +56,7 @@ export function ResultBars({
     <div className="res">
       {rows.map(([nr, v]) => {
         const c = election.candidates[nr];
-        const o = official[nr] ?? 0, s = study[nr] ?? 0;
+        const o = official[nr] ?? 0, s = study[nr] ?? 0, q = opp[nr] ?? 0;
         return (
           <div className="res-row" key={nr}>
             <div className="res-top">
@@ -70,9 +70,10 @@ export function ResultBars({
             <div className="res-bar" role="img" aria-label={`${c.name}: ${fmtInt(o)} votos oficiais, ${fmtInt(s)} de estudo`}>
               <i style={{ width: `${total ? (o / total) * 100 : 0}%`, background: c.color }} />
               {s > 0 && <i className="study" style={{ width: `${(s / total) * 100}%` }} />}
+              {q > 0 && <i className="opp" style={{ width: `${(q / total) * 100}%` }} />}
             </div>
             <div className="res-num">
-              {fmtInt(o)} oficiais{s > 0 && <> · <span className="study-text">+{fmtInt(s)} estudo</span></>}
+              {fmtInt(o)} oficiais{s > 0 && <> · <span className="study-text">+{fmtInt(s)} estudo</span></>}{q > 0 && <> · <span className="opp-text">+{fmtInt(q)} oposição</span></>}
             </div>
           </div>
         );
@@ -82,6 +83,6 @@ export function ResultBars({
   );
 }
 
-export const Tag = ({ kind }: { kind: 'official' | 'study' }) => (
-  <span className={`tag ${kind}`}>{kind === 'official' ? 'Oficial · TSE' : 'Estudo · fictício'}</span>
+export const Tag = ({ kind }: { kind: 'official' | 'study' | 'opp' }) => (
+  <span className={`tag ${kind}`}>{kind === 'official' ? 'Oficial · TSE' : kind === 'study' ? 'Estudo · fictício' : 'Oposição · fictício'}</span>
 );

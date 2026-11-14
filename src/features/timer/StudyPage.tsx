@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Election } from '../../core/types';
 import { elapsedSeconds, fmtClock, fmtCompact, fmtDuration, fmtInt, isRunning, votesFor } from '../../core';
-import { dayKey, minutesToGoal, STRATEGY_INFO, secondsByDay, streak } from '../../core';
+import { diffDays, dayKey, minutesToGoal, penaltyVotes, STRATEGY_INFO, secondsByDay, streak } from '../../core';
 import { useStore, useUi } from '../../state/store';
 import { useGame } from '../../state/useGame';
 import { useNow } from './useNow';
@@ -84,7 +84,7 @@ export function StudyPage({ election }: { election: Election }) {
           <section className="goal-row">
             <div className="goal-head">
               <h2>
-                {game.goal.reached ? 'Objetivo atingido'
+                {c.status === 'derrota' ? 'Prazo encerrado' : game.goal.reached ? 'Objetivo atingido'
                   : game.goal.kind === 'avancar' ? `Chegar ao 2º turno`
                   : game.goal.kind === 'liderar' ? 'Liderar o 1º turno' : 'Vencer o 2º turno'}
               </h2>
@@ -100,6 +100,29 @@ export function StudyPage({ election }: { election: Election }) {
                 : <span>Faltam <b className="num">{fmtCompact(game.goal.needed)}</b> votos
                   (≈ {fmtDuration(minutesToGoal(game.goal.needed, c.rate) * 60)} de estudo).</span>}
             </div>
+            {c.penalty && c.status === 'ativa' && (() => {
+              const mine = secondsByDay(sessions.filter((s) => s.campaignId === c.id));
+              const todayS = (mine.get(today) ?? 0) + secs;
+              const shortMin = Math.max(0, c.dailyGoalMin - todayS / 60);
+              const lastLoss = c.losses.find((l) => !l.free && l.votes > 0);
+              return (
+                <>
+                  {shortMin >= 1 && (
+                    <div className="banner">
+                      Faltam <b className="num">{Math.ceil(shortMin)} min</b> hoje. Se o dia acabar assim, {rival.name} ganha{' '}
+                      <b className="num opp-text">{fmtInt(penaltyVotes(shortMin, c.rate))}</b> votos
+                      {c.lastFreeDay && diffDays(c.lastFreeDay, today) < 7 ? '' : ' (hoje você ainda tem a folga da semana)'}.
+                    </div>
+                  )}
+                  {lastLoss && (
+                    <p className="small muted">
+                      Último dia perdido: {new Date(lastLoss.day + 'T12:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}, faltaram {lastLoss.shortMin} min
+                      e {rival.name} ganhou <b className="opp-text num">{fmtInt(lastLoss.votes)}</b> votos.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
             {game.expired && (
               <div className="banner">
                 O prazo de {c.days} dias terminou antes do objetivo. <button className="link" onClick={() => openCampaign('replanejar')}>Definir novo prazo</button>
