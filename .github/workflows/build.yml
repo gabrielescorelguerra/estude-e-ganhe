@@ -1,0 +1,57 @@
+name: build
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with: { name: web-dist, path: dist }
+
+  apk:
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Compilar APK (debug, assinado com a chave de debug: instalável direto)
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Renomear
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk estude-e-ganhe.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: estude-e-ganhe-apk, path: estude-e-ganhe.apk }
+      - name: Publicar na release "apk-latest" (link fixo para baixar)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: APK mais recente
+          body: "APK de debug gerado automaticamente a partir do último commit (${{ github.sha }}). Habilite 'instalar apps desconhecidos' no Android para instalar."
+          prerelease: true
+          files: estude-e-ganhe.apk
+          target_commitish: ${{ github.sha }}

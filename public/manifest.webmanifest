@@ -1,0 +1,11 @@
+{
+  "name": "Estude e Ganhe",
+  "short_name": "Estude e Ganhe",
+  "description": "Transforme tempo de estudo em votos fictícios numa eleição real do passado.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F3F0E8",
+  "theme_color": "#15140F",
+  "lang": "pt-BR",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
