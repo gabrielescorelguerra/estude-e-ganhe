@@ -1,9 +1,9 @@
 import type { Election } from '../../core/types';
-import { addDays, dayKey, fmtDate, fmtDuration, fmtHours, fmtInt, fmtTime, lastDays, secondsByDay, streak, sumSeconds } from '../../core';
+import { BADGES, addDays, dayKey, fmtDate, fmtDuration, fmtHours, fmtInt, fmtTime, lastDays, secondsByDay, streak, sumSeconds } from '../../core';
 import { useStore, useUi } from '../../state/store';
 
 export function ProgressPage({ election }: { election: Election }) {
-  const { sessions, dailyGoalMin, setDailyGoal, deleteSession, campaigns, activeCampaignId, selectCampaign, deleteCampaign } = useStore();
+  const { sessions, dailyGoalMin, setDailyGoal, deleteSession, campaigns, activeCampaignId, selectCampaign, deleteCampaign, badges } = useStore();
   const { openCampaign } = useUi();
   const today = dayKey(Date.now());
   const byDay = secondsByDay(sessions);
@@ -56,6 +56,23 @@ export function ProgressPage({ election }: { election: Election }) {
         <h2 style={{ fontSize: 22 }}>Últimas 17 semanas</h2>
         <div className="heat" role="img" aria-label="Mapa de calor de estudo">
           {cells.map((c) => <i key={c.k} className={lvl(c.s)} style={c.s < 0 ? { visibility: 'hidden' } : undefined} title={`${c.k}: ${fmtDuration(Math.max(0, c.s))}`} />)}
+        </div>
+      </section>
+
+      <section className="sect">
+        <div className="sect-title"><h2 style={{ fontSize: 22 }}>Conquistas</h2><span className="small muted">{BADGES.filter((b) => badges[b.id]).length} de {BADGES.length}</span></div>
+        <div className="badges">
+          {BADGES.map((b) => (
+            <div key={b.id} className={`badge${badges[b.id] ? '' : ' locked'}`}>
+              <span className="bm" aria-hidden>
+                {badges[b.id]
+                  ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7" /></svg>
+                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>}
+              </span>
+              <b>{b.name}</b>
+              <span className="small muted">{b.desc}</span>
+            </div>
+          ))}
         </div>
       </section>
 

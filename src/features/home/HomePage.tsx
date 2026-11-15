@@ -116,6 +116,19 @@ export function HomePage({ election }: { election: Election }) {
           )}
         </section>
       </div>
+      {c.feed.length > 0 && (
+        <section className="card">
+          <div className="sect-title"><h3>Notícias da campanha</h3><span className="small faint">{c.feed.length} no total</span></div>
+          <ul className="feed">
+            {c.feed.slice(0, 5).map((f) => (
+              <li key={f.id} className={f.tone}>
+                <i className="mk" />
+                <span><b>{f.title}</b><span className="small muted">{f.text}</span><span className="small faint"> · {fmtDate(new Date(f.day + 'T12:00').getTime())}</span></span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <p className="small faint" style={{ textAlign: 'center' }}>{diffDays(dayKey(c.createdAt), today)} dias de campanha · dados eleitorais oficiais do TSE; votos de estudo são fictícios.</p>
     </div>
   );

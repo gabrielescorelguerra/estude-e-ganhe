@@ -3,7 +3,9 @@ import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { Count } from './ui/motion';
 import { useEffect, useState } from 'react';
 import type { Election } from './core/types';
-import { applyStrategy, dayKey, elapsedSeconds, fmtClock, isRunning, secondsByDay, settleLosses, splitInt, sum, officialTally } from './core';
+import { applyStrategy, dayKey, elapsedSeconds, fmtClock, isRunning, secondsByDay, streak, winnerOf, addTallies, officialTally, studyTally, oppTally, BADGES, type BadgeStats } from './core';
+import { runSettlement } from './state/settle';
+import { Toasts } from './ui/Toasts';
 import { DEFAULT_ELECTION, loadElection } from './data/loader';
 import { selectCampaign, useStore, useUi, type Tab } from './state/store';
 import { useGame } from './state/useGame';
@@ -49,7 +51,8 @@ function Shell({ election }: { election: Election }) {
     const r = document.documentElement;
     if (theme === 'auto') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', theme === 'claro' ? 'light' : 'dark');
   }, [theme]);
-  const { place, setStrategy, patchCampaign, campaigns, settle, sessions } = useStore();
+  const { place, setStrategy, patchCampaign, campaigns, applySettlement, sessions, badges, unlockBadges, dailyGoalMin } = useStore();
+  const toast = useUi((u) => u.toast);
   const [today, setToday] = useState(() => dayKey(Date.now()));
   useEffect(() => {
     const id = setInterval(() => setToday(dayKey(Date.now())), 30000);
@@ -70,23 +73,18 @@ function Shell({ election }: { election: Election }) {
     if (next !== strat) setStrategy(c.id, next);
   }, [wallet, strat, game, election, place, setStrategy]);
 
-  // oposição ativa: apura os dias encerrados e dá os votos do adversário
+  // fechamento dos dias: metas não cumpridas, contra-ataque e eventos
   const camp = game?.campaign;
   useEffect(() => {
-    if (!game || !camp || !camp.penalty || camp.status !== 'ativa' || camp.mode === 'livre') return;
-    if (game.goal.reached) return;
-    const mine = secondsByDay(sessions.filter((s) => s.campaignId === camp.id));
-    const r = settleLosses({
-      settledThrough: camp.settledThrough, today, deadline: camp.deadline, goalMin: camp.dailyGoalMin,
-      rate: camp.rate, rivalNr: game.goal.rivalNr, lastFreeDay: camp.lastFreeDay,
-      studiedSeconds: (d) => mine.get(d) ?? 0,
-    });
-    if (r.settledThrough === camp.settledThrough) return;
-    const total = r.losses.reduce((a, l) => a + l.votes, 0);
-    const places = election.places.map((p) => p.id);
-    const parts = total > 0 ? splitInt(total, places.map((id) => sum(officialTally(election, camp.round, id)))) : [];
-    settle(camp.id, r, places.map((id, i) => ({ place: id, nr: game.goal.rivalNr, votes: parts[i] ?? 0 })).filter((p) => p.votes > 0));
-  }, [camp, game, sessions, today, election, settle]);
+    if (!game || !camp || camp.status !== 'ativa' || camp.mode === 'livre' || game.goal.reached) return;
+    if (!camp.penalty && !camp.reactive && !camp.eventsOn) return;
+    const s = runSettlement({ campaign: camp, sessions, election, today, rivalNr: game.goal.rivalNr });
+    if (!s) return;
+    applySettlement(camp.id, s);
+    // avisa dos fatos mais recentes (no máximo 2)
+    s.feed.filter((f) => f.kind !== 'perda' || f.tone === 'ruim').slice(0, 2)
+      .forEach((f) => toast({ title: f.title, text: f.text, tone: f.tone }));
+  }, [camp, game, sessions, today, election, applySettlement, toast]);
 
   // prazo encerrado sem o objetivo: derrota
   const lost = game?.expired && game.campaign.status === 'ativa' && game.campaign.mode !== 'livre';
@@ -95,6 +93,36 @@ function Shell({ election }: { election: Election }) {
     patchCampaign(game.campaign.id, { status: 'derrota' });
     openCampaign('derrota');
   }, [lost, game, patchCampaign, openCampaign]);
+
+  // conquistas
+  useEffect(() => {
+    if (!game) return;
+    const byDay = secondsByDay(sessions);
+    let flips = 0;
+    for (const p of election.places) {
+      const off = officialTally(election, game.campaign.round, p.id);
+      const sim = addTallies(addTallies(off, studyTally(game.campaign, p.id)), oppTally(game.campaign, p.id));
+      if (p.kind === 'uf' && winnerOf(sim)?.nr !== winnerOf(off)?.nr) flips++;
+    }
+    const hour = (ts: number) => new Date(ts).getHours();
+    const stats: BadgeStats = {
+      sessions: sessions.length,
+      totalSeconds: sessions.reduce((a, x) => a + x.seconds, 0),
+      streak: streak(byDay, dailyGoalMin, today),
+      longestSessionMin: Math.max(0, ...sessions.map((x) => x.seconds / 60)),
+      flips,
+      advanced: campaigns.some((c) => c.round === 1 && c.status === 'vencida'),
+      won: campaigns.some((c) => c.round === 2 && c.status === 'vencida'),
+      earlyBird: sessions.some((x) => hour(x.start) >= 4 && hour(x.start) < 6),
+      nightOwl: sessions.some((x) => hour(x.start) >= 23),
+      counters: campaigns.reduce((a, c) => a + c.feed.filter((f) => f.kind === 'contra').length, 0),
+      events: campaigns.reduce((a, c) => a + c.feed.filter((f) => f.kind === 'evento').length, 0),
+    };
+    const fresh = BADGES.filter((b) => !badges[b.id] && b.check(stats));
+    if (!fresh.length) return;
+    unlockBadges(fresh.map((b) => b.id));
+    fresh.slice(0, 2).forEach((b) => toast({ title: `Conquista: ${b.name}`, text: b.desc, tone: 'conquista' }));
+  }, [sessions, campaigns, game, election, badges, dailyGoalMin, today, unlockBadges, toast]);
 
   // objetivo atingido: marca a campanha e celebra uma única vez
   const reached = game?.goal.reached && game.campaign.status === 'ativa';
@@ -145,6 +173,7 @@ function Shell({ election }: { election: Election }) {
         </motion.div>
       </main>
 
+      <Toasts />
       <Dock election={election} />
       <nav className="tabbar" aria-label="Seções">
         {TABS.map(([t, l, Icon]) => <button key={t} aria-current={tab === t ? 'page' : undefined} onClick={() => setTab(t)}>{tab === t && <motion.i layoutId="tabmark" className="tabmark" transition={{ type: 'spring', stiffness: 500, damping: 36 }} />}<Icon /><span>{l}</span></button>)}

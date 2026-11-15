@@ -114,3 +114,52 @@ describe('oposição', () => {
     expect(r.losses.every((l) => l.day <= '2026-12-09')).toBe(true);
   });
 });
+
+import { counterAttack, COUNTER_FACTOR } from './rival';
+import { rollEvent, rng, effectiveRate, EVENT_CHANCE } from './events';
+import { BADGES } from './badges';
+describe('contra-ataque', () => {
+  it('reage nos estados onde você mais investiu desde a última apuração', () => {
+    const prev = { 'SP|13': 1000 };
+    const now = { 'SP|13': 3000, '3550308|13': 2000, 'RJ|13': 500, 'MG|13': 100, 'BA|13': 50, 'SP|99': 9999 };
+    const c = counterAttack(prev, now, 13);
+    expect(c.map((x) => x.place)).toEqual(['SP', 'RJ', 'MG']);
+    expect(c[0].delta).toBe(4000);
+    expect(c[0].votes).toBe(Math.round(4000 * COUNTER_FACTOR));
+  });
+  it('sem novos votos não há reação', () => expect(counterAttack({ 'SP|13': 5 }, { 'SP|13': 5 }, 13)).toEqual([]));
+});
+describe('eventos', () => {
+  const ctx = { today: '2026-11-14', rate: 1000, goalMin: 60, focusName: 'A', rivalName: 'B', places: ['SP', 'RJ', 'MG', 'BA'].map((id) => ({ id, name: id })) };
+  it('é determinístico', () => {
+    for (let i = 0; i < 40; i++) expect(JSON.stringify(rollEvent('c|' + i, ctx, true))).toBe(JSON.stringify(rollEvent('c|' + i, ctx, true)));
+    expect(rng('x')()).toBe(rng('x')());
+  });
+  it('frequência próxima da chance configurada, e quem cumpre a meta recebe mais boas notícias', () => {
+    let n = 0, goodMet = 0, goodMissed = 0, totMet = 0, totMissed = 0;
+    for (let i = 0; i < 4000; i++) {
+      const a = rollEvent('s|' + i, ctx, true), b = rollEvent('s|' + i, ctx, false);
+      if (a) { n++; totMet++; if (a.feed.tone === 'bom') goodMet++; }
+      if (b) { totMissed++; if (b.feed.tone === 'bom') goodMissed++; }
+    }
+    expect(n / 4000).toBeGreaterThan(EVENT_CHANCE - 0.05);
+    expect(n / 4000).toBeLessThan(EVENT_CHANCE + 0.05);
+    expect(goodMet / totMet).toBeGreaterThan(goodMissed / totMissed + 0.2);
+  });
+  it('bônus de taxa vale até o dia indicado', () => {
+    const c = { rate: 1000, boost: { mult: 2, until: '2026-11-14' } };
+    expect(effectiveRate(c, '2026-11-14')).toBe(2000);
+    expect(effectiveRate(c, '2026-11-15')).toBe(1000);
+  });
+});
+describe('conquistas', () => {
+  const base = { sessions: 0, totalSeconds: 0, streak: 0, longestSessionMin: 0, flips: 0, advanced: false, won: false, earlyBird: false, nightOwl: false, counters: 0, events: 0 };
+  it('ids únicos e nada desbloqueado do zero', () => {
+    expect(new Set(BADGES.map((b) => b.id)).size).toBe(BADGES.length);
+    expect(BADGES.filter((b) => b.check(base))).toEqual([]);
+  });
+  it('desbloqueia por critério', () => {
+    const got = BADGES.filter((b) => b.check({ ...base, sessions: 5, totalSeconds: 11 * 3600, streak: 7 })).map((b) => b.id);
+    expect(got).toEqual(['primeira', 'cinco', 'dez-horas', 'semana']);
+  });
+});

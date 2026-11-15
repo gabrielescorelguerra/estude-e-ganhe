@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { ActiveSession, Campaign, Loss, Session, StrategyConfig } from '../core/types';
+import type { ActiveSession, Campaign, FeedItem, Loss, Session, StrategyConfig } from '../core/types';
+import { effectiveRate } from '../core/events';
 import { addDays, dayKey } from '../core/plan';
 import { elapsedSeconds, isRunning, pauseSegments, resumeSegments, votesFor } from '../core/timer';
 import { allocKey, allocatedTotal } from '../core/tally';
@@ -16,6 +17,7 @@ export interface PersistedState {
   dailyGoalMin: number;
   labels: string[];
   theme: Theme;
+  badges: Record<string, number>;
 }
 
 export type Theme = 'auto' | 'claro' | 'escuro';
@@ -33,14 +35,29 @@ interface Actions {
   importAll: (json: string) => boolean;
   resetAll: () => void;
 
-  addCampaign: (c: Omit<Campaign, 'id' | 'createdAt' | 'allocations' | 'status' | 'strategy' | 'opposition' | 'settledThrough' | 'lastFreeDay' | 'losses'> & Partial<Pick<Campaign, 'strategy'>>) => string;
-  settle: (campaignId: string, r: { losses: Loss[]; settledThrough: string; lastFreeDay: string | null }, placements: Placement[]) => void;
+  addCampaign: (c: Omit<Campaign, 'id' | 'createdAt' | 'allocations' | 'status' | 'strategy' | 'opposition' | 'settledThrough' | 'lastFreeDay' | 'losses' | 'bonus' | 'snapshot' | 'boost' | 'lastEventDay' | 'feed'> & Partial<Pick<Campaign, 'strategy'>>) => string;
+  applySettlement: (campaignId: string, p: Settlement) => void;
+  unlockBadges: (ids: string[]) => void;
   selectCampaign: (id: string) => void;
   patchCampaign: (id: string, patch: Partial<Campaign>) => void;
   deleteCampaign: (id: string) => void;
   place: (campaignId: string, placements: Placement[]) => void;
   unplace: (campaignId: string, key: string) => void;
   setStrategy: (campaignId: string, s: StrategyConfig) => void;
+}
+
+export interface Settlement {
+  losses: Loss[];
+  settledThrough: string;
+  lastFreeDay: string | null;
+  /** votos do adversário (perdas, contra-ataque, eventos) */
+  opposition: Placement[];
+  /** votos extras para você (eventos) */
+  bonus: Placement[];
+  feed: FeedItem[];
+  boost: Campaign['boost'];
+  snapshot: Record<string, number>;
+  lastEventDay: string | null;
 }
 
 export type Store = PersistedState & Actions;
@@ -55,13 +72,14 @@ export const useStore = create<Store>()(
       dailyGoalMin: 90,
       labels: [],
       theme: 'auto',
+      badges: {},
 
       start: (label) => {
         if (get().active) return;
         const c = get().campaigns.find((x) => x.id === get().activeCampaignId) ?? null;
         const now = Date.now();
         set({
-          active: { id: uid(), label: label.trim(), campaignId: c?.id ?? null, rate: c?.rate ?? 0, segments: [{ start: now }] },
+          active: { id: uid(), label: label.trim(), campaignId: c?.id ?? null, rate: c ? effectiveRate(c, dayKey(now)) : 0, segments: [{ start: now }] },
         });
       },
       pause: () => {
@@ -114,19 +132,32 @@ export const useStore = create<Store>()(
         const camp: Campaign = {
           ...c, strategy: c.strategy ?? { kind: 'manual' }, id, createdAt: Date.now(), allocations: {}, status: 'ativa',
           opposition: {}, losses: [], lastFreeDay: null, settledThrough: addDays(dayKey(Date.now()), -1),
+          bonus: {}, snapshot: {}, boost: null, lastEventDay: null, feed: [],
         };
         set({ campaigns: [camp, ...get().campaigns], activeCampaignId: id });
         return id;
       },
-      settle: (campaignId, r, placements) =>
+      applySettlement: (campaignId, s) =>
         set({
           campaigns: get().campaigns.map((c) => {
             if (c.id !== campaignId) return c;
-            const opposition = { ...c.opposition };
-            for (const p of placements) opposition[allocKey(p.place, p.nr)] = (opposition[allocKey(p.place, p.nr)] ?? 0) + p.votes;
-            return { ...c, opposition, losses: [...r.losses, ...c.losses].slice(0, 200), settledThrough: r.settledThrough, lastFreeDay: r.lastFreeDay };
+            const merge = (base: Record<string, number>, ps: Placement[]) => {
+              const out = { ...base };
+              for (const p of ps) out[allocKey(p.place, p.nr)] = (out[allocKey(p.place, p.nr)] ?? 0) + p.votes;
+              return out;
+            };
+            return {
+              ...c,
+              opposition: merge(c.opposition, s.opposition),
+              bonus: merge(c.bonus, s.bonus),
+              losses: [...s.losses, ...c.losses].slice(0, 200),
+              feed: [...s.feed, ...c.feed].slice(0, 60),
+              settledThrough: s.settledThrough, lastFreeDay: s.lastFreeDay, snapshot: s.snapshot,
+              boost: s.boost ?? c.boost, lastEventDay: s.lastEventDay ?? c.lastEventDay,
+            };
           }),
         }),
+      unlockBadges: (ids) => set({ badges: { ...get().badges, ...Object.fromEntries(ids.map((id) => [id, Date.now()])) } }),
       selectCampaign: (id) => set({ activeCampaignId: id }),
       patchCampaign: (id, patch) =>
         set({ campaigns: get().campaigns.map((c) => (c.id === id ? { ...c, ...patch } : c)) }),
@@ -165,7 +196,7 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'estude-e-ganhe/v1',
-      version: 2,
+      version: 3,
       migrate: (persisted) => {
         const st = persisted as PersistedState;
         const today = dayKey(Date.now());
@@ -173,14 +204,17 @@ export const useStore = create<Store>()(
           ...c,
           penalty: c.penalty ?? false, opposition: c.opposition ?? {}, losses: c.losses ?? [], lastFreeDay: c.lastFreeDay ?? null,
           settledThrough: c.settledThrough ?? addDays(today, -1),
+          bonus: c.bonus ?? {}, reactive: c.reactive ?? false, eventsOn: c.eventsOn ?? false, snapshot: c.snapshot ?? { ...c.allocations },
+          boost: c.boost ?? null, lastEventDay: c.lastEventDay ?? null, feed: c.feed ?? [],
           status: (c.status as string) === 'expirada' ? 'derrota' : c.status,
         }));
+        st.badges = st.badges ?? {};
         return st;
       },
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         sessions: s.sessions, active: s.active, campaigns: s.campaigns,
-        activeCampaignId: s.activeCampaignId, dailyGoalMin: s.dailyGoalMin, labels: s.labels, theme: s.theme,
+        activeCampaignId: s.activeCampaignId, dailyGoalMin: s.dailyGoalMin, labels: s.labels, theme: s.theme, badges: s.badges,
       }),
     },
   ),
@@ -210,7 +244,12 @@ interface UiState {
   openCampaign: (m: UiState['campaignModal']) => void;
   summary: Session | null;
   setSummary: (s: Session | null) => void;
+  toasts: Toast[];
+  toast: (t: Omit<Toast, 'id'>) => void;
+  dismissToast: (id: string) => void;
 }
+
+export interface Toast { id: string; title: string; text: string; tone: 'bom' | 'ruim' | 'neutro' | 'conquista' }
 
 export const useUi = create<UiState>((set) => ({
   tab: 'inicio',
@@ -224,4 +263,7 @@ export const useUi = create<UiState>((set) => ({
   openCampaign: (campaignModal) => set({ campaignModal }),
   summary: null,
   setSummary: (summary) => set({ summary }),
+  toasts: [],
+  toast: (t) => set((s) => ({ toasts: [...s.toasts, { ...t, id: uid() }].slice(-3) })),
+  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));

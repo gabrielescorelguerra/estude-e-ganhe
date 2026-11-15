@@ -31,9 +31,9 @@ export function officialTally(election: Election, round: Round, placeId?: string
 }
 
 /** votos de estudo (fictícios) por candidato em um lugar (UF inclui os municípios dela) ou no país todo */
-export function studyTally(c: Pick<Campaign, 'allocations'>, placeId?: string): Tally {
+export function studyTally(c: Pick<Campaign, 'allocations'> & Partial<Pick<Campaign, 'bonus'>>, placeId?: string): Tally {
   const t: Tally = {};
-  for (const [k, v] of Object.entries(c.allocations)) {
+  for (const [k, v] of [...Object.entries(c.allocations), ...Object.entries(c.bonus ?? {})]) {
     const { place, nr } = parseAllocKey(k);
     if (placeId && placeId.length <= 2 ? placeId && ufOfPlace(place) !== placeId : placeId && place !== placeId) continue;
     t[nr] = (t[nr] ?? 0) + v;

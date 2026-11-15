@@ -6,3 +6,6 @@ export * from './timer';
 export * from './stats';
 export * from './strategies';
 export * from './penalty';
+export * from './rival';
+export * from './badges';
+export { effectiveRate, rollEvent, rng, EVENT_CHANCE, EVENT_MIN_GAP_DAYS } from './events';

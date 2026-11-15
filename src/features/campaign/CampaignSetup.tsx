@@ -11,6 +11,15 @@ import { Avatar, Modal } from '../../ui/bits';
 
 type Mode = 'novo' | 'avancar' | 'replanejar';
 
+function Toggle({ checked, onChange, title, text }: { checked: boolean; onChange: (v: boolean) => void; title: string; text: string }) {
+  return (
+    <label className="toggle-row">
+      <span><b>{title}</b><span className="small muted">{text}</span></span>
+      <span className="switch"><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /><i /></span>
+    </label>
+  );
+}
+
 export function CampaignSetup({ election: current, mode, game }: { election: Election; mode: Mode; game: Game | null }) {
   const { openCampaign } = useUi();
   const { addCampaign, patchCampaign, setDailyGoal, dailyGoalMin, campaigns } = useStore();
@@ -41,6 +50,8 @@ export function CampaignSetup({ election: current, mode, game }: { election: Ele
   const [minutes, setMinutes] = useState(replan ? prev!.dailyGoalMin : dailyGoalMin);
   const [marginPct, setMarginPct] = useState(replan ? prev!.marginPct || 2 : 2);
   const [penalty, setPenalty] = useState(replan ? prev!.penalty : true);
+  const [reactive, setReactive] = useState(replan ? prev!.reactive : true);
+  const [eventsOn, setEventsOn] = useState(replan ? prev!.eventsOn : true);
   const [free, setFree] = useState(replan ? prev!.mode === 'livre' : false);
   const [freeRate, setFreeRate] = useState(replan && prev!.mode === 'livre' ? prev!.rate : FREE_RATE);
 
@@ -65,9 +76,9 @@ export function CampaignSetup({ election: current, mode, game }: { election: Ele
     const common = { days, deadline: addDays(dayKey(Date.now()), days), dailyGoalMin: minutes, marginPct: effMargin, rate, baseNeeded: goal.needed };
     setDailyGoal(minutes);
     if (replan) {
-      patchCampaign(prev!.id, { ...common, mode: free ? 'livre' : 'plano', penalty: penalty && !free, status: 'ativa', settledThrough: addDays(dayKey(Date.now()), -1) });
+      patchCampaign(prev!.id, { ...common, mode: free ? 'livre' : 'plano', penalty: penalty && !free, reactive: reactive && !free, eventsOn: eventsOn && !free, status: 'ativa', settledThrough: addDays(dayKey(Date.now()), -1) });
     } else {
-      addCampaign({ electionId: election.id, round, focusNr, mode: free ? 'livre' : 'plano', penalty: penalty && !free, ...common });
+      addCampaign({ electionId: election.id, round, focusNr, mode: free ? 'livre' : 'plano', penalty: penalty && !free, reactive: reactive && !free, eventsOn: eventsOn && !free, ...common });
     }
     openCampaign(null);
   };
@@ -149,16 +160,16 @@ export function CampaignSetup({ election: current, mode, game }: { election: Ele
         </div>
 
         {!free && (
-          <label className="sect" style={{ gridTemplateColumns: 'auto 1fr', alignItems: 'start', gap: 10, display: 'grid', cursor: 'pointer' }}>
-            <input type="checkbox" checked={penalty} onChange={(e) => setPenalty(e.target.checked)} style={{ marginTop: 4 }} />
-            <span>
-              <b>Oposição ativa</b>
-              <span className="small muted" style={{ display: 'block' }}>
-                Cada minuto da meta diária que você não estuda dá votos ao adversário: metade do que você ganharia (≈ {fmtInt(rate / 2)} por minuto).
-                Uma folga por semana, sem punição. Se o prazo acabar sem o objetivo, você perde.
-              </span>
-            </span>
-          </label>
+          <div className="sect">
+            <span className="lbl">Desafios da campanha</span>
+            <Toggle checked={penalty} onChange={setPenalty} title="Oposição ativa"
+              text={`Cada minuto da meta diária que você não estuda dá votos ao adversário (≈ ${fmtInt(rate / 2)} por minuto). Uma folga por semana.`} />
+            <Toggle checked={reactive} onChange={setReactive} title="Adversário reage"
+              text="Onde você investe muitos votos, o adversário responde com uma parte deles no fim do dia." />
+            <Toggle checked={eventsOn} onChange={setEventsOn} title="Eventos de campanha"
+              text="De vez em quando acontece algo: debate, apoio, boato, greve. Quem cumpre a meta tem mais sorte." />
+            <p className="small muted">Se o prazo acabar sem o objetivo, você perde.</p>
+          </div>
         )}
 
         <div className="plan" aria-live="polite">

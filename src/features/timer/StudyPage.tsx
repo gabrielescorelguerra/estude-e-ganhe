@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Election } from '../../core/types';
 import { elapsedSeconds, fmtClock, fmtCompact, fmtDuration, fmtInt, isRunning, votesFor } from '../../core';
-import { diffDays, dayKey, minutesToGoal, penaltyVotes, STRATEGY_INFO, secondsByDay, streak } from '../../core';
+import { diffDays, dayKey, effectiveRate, minutesToGoal, penaltyVotes, STRATEGY_INFO, secondsByDay, streak } from '../../core';
 import { useStore, useUi } from '../../state/store';
 import { useGame } from '../../state/useGame';
 import { useNow } from './useNow';
@@ -71,11 +71,14 @@ export function StudyPage({ election }: { election: Election }) {
           </button>
         )}
 
+        {c && c.boost && c.boost.until >= today && (
+          <span className={`boost-chip${c.boost.mult < 1 ? ' ruim' : ''}`}>{c.boost.label}: votos ×{c.boost.mult.toLocaleString('pt-BR')} até {new Date(c.boost.until + 'T12:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}</span>
+        )}
         <div className="live-votes" aria-live="polite">
           {active && c ? (
             <>+{fmtInt(liveVotes)} votos<small>{focus?.name} · {fmtInt(active.rate)} por minuto</small></>
           ) : c ? (
-            <span className="small muted">1 minuto de estudo = <b className="num study-text">{fmtInt(c.rate)}</b> votos para {focus?.name}</span>
+            <span className="small muted">1 minuto de estudo = <b className="num study-text">{fmtInt(effectiveRate(c, today))}</b> votos para {focus?.name}</span>
           ) : null}
         </div>
       </section>

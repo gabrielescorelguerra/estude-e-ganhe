@@ -89,6 +89,27 @@ export interface Campaign {
   /** última folga usada (1 por janela de 7 dias) */
   lastFreeDay: string | null;
   losses: Loss[];
+  /** votos extras (eventos), contam como seus mas não saem do saldo */
+  bonus: Record<string, number>;
+  /** adversário reage onde você mais investiu */
+  reactive: boolean;
+  /** eventos aleatórios */
+  eventsOn: boolean;
+  /** alocações na última apuração (base do contra-ataque) */
+  snapshot: Record<string, number>;
+  /** multiplicador temporário da taxa (eventos) */
+  boost: { mult: number; until: string; label: string } | null;
+  lastEventDay: string | null;
+  feed: FeedItem[];
+}
+
+export interface FeedItem {
+  id: string;
+  day: string;
+  kind: 'contra' | 'evento' | 'perda';
+  title: string;
+  text: string;
+  tone: 'bom' | 'ruim' | 'neutro';
 }
 
 export interface Loss {

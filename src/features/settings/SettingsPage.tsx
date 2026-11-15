@@ -71,6 +71,14 @@ export function SettingsPage({ election }: { election: Election }) {
             <label className="switch"><input type="checkbox" checked={c.penalty} disabled={c.mode === 'livre'} onChange={(e) => patchCampaign(c.id, { penalty: e.target.checked, settledThrough: c.settledThrough })} /><i /></label>
           </div>
           <div className="row">
+            <div><b>Adversário reage</b><span className="small muted">Responde onde você investe muitos votos.</span></div>
+            <label className="switch"><input type="checkbox" checked={c.reactive} disabled={c.mode === 'livre'} onChange={(e) => patchCampaign(c.id, { reactive: e.target.checked, snapshot: { ...c.allocations } })} /><i /></label>
+          </div>
+          <div className="row">
+            <div><b>Eventos de campanha</b><span className="small muted">Debates, apoios, boatos e greves ao longo dos dias.</span></div>
+            <label className="switch"><input type="checkbox" checked={c.eventsOn} disabled={c.mode === 'livre'} onChange={(e) => patchCampaign(c.id, { eventsOn: e.target.checked })} /><i /></label>
+          </div>
+          <div className="row">
             <div><b>Outra campanha</b><span className="small muted">Suas sessões e campanhas anteriores continuam salvas.</span></div>
             <button className="btn ghost small" onClick={() => openCampaign('novo')}>Nova campanha</button>
           </div>

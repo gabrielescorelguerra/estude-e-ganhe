@@ -367,3 +367,36 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 .chip.exterior { position: absolute; overflow: visible; }
+
+.toggle-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid var(--rule); cursor: pointer; }
+.toggle-row > span:first-child { display: grid; gap: 1px; min-width: 0; }
+.sect > .toggle-row:first-of-type { border-top: 0; }
+
+/* avisos */
+.toasts { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(86px + var(--safe-b)); display: grid; gap: 8px; width: min(420px, calc(100% - 24px)); pointer-events: none; }
+.toast { pointer-events: auto; display: flex; gap: 12px; align-items: flex-start; text-align: left; border: 1px solid var(--rule); background: var(--surface); border-radius: 14px; padding: 12px 14px; box-shadow: var(--sh-3); }
+.toast-mark { width: 4px; align-self: stretch; border-radius: 4px; background: var(--ink-3); flex: none; }
+.toast.bom .toast-mark { background: #2f8f5b; }
+.toast.ruim .toast-mark { background: var(--danger); }
+.toast.conquista .toast-mark { background: var(--study-fill); }
+.toast-body { display: grid; gap: 2px; font-size: 13.5px; color: var(--ink-2); }
+.toast-body b { color: var(--ink); font-size: 14px; }
+@media (min-width: 861px) { .toasts { bottom: 90px; } }
+
+/* notícias da campanha */
+.feed { list-style: none; margin: 0; padding: 0; display: grid; }
+.feed li { display: grid; grid-template-columns: 8px 1fr; gap: 12px; padding: 11px 0; border-top: 1px solid var(--rule); }
+.feed li:first-child { border-top: 0; }
+.feed .mk { width: 8px; border-radius: 4px; background: var(--ink-3); }
+.feed .bom .mk { background: #2f8f5b; } .feed .ruim .mk { background: var(--danger); }
+.feed b { display: block; font-size: 14px; }
+
+/* conquistas */
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.badge { display: grid; gap: 3px; padding: 13px 14px; border: 1px solid var(--rule); border-radius: 14px; background: var(--surface); box-shadow: var(--sh-1); min-width: 0; }
+.badge .bm { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--study-soft); color: var(--study); margin-bottom: 4px; }
+.badge.locked { background: var(--surface-2); box-shadow: none; }
+.badge.locked .bm { background: var(--sunken); color: var(--ink-3); }
+.badge.locked b, .badge.locked span { color: var(--ink-3); }
+.boost-chip { display: inline-flex; gap: 8px; align-items: center; padding: 6px 12px; border-radius: 99px; font-size: 13px; font-weight: 550; background: var(--study-soft); color: var(--study); }
+.boost-chip.ruim { background: color-mix(in srgb, var(--danger) 14%, var(--surface)); color: var(--danger); }
