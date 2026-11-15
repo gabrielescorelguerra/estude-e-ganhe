@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CandidateMeta, Election, Tally } from '../core/types';
 import { fmtInt, fmtPct } from '../core/format';
 import { rank, sum } from '../core';
@@ -9,10 +9,18 @@ export function initials(name: string) {
 }
 
 /** Sem fotos oficiais disponíveis: avatar tipográfico na cor do candidato. */
+// Foto oficial do TSE (DivulgaCandContas), carregada pelo próprio aparelho do usuário.
+const TSE_PHOTO = (sq: string) => `https://divulgacandcontas.tse.jus.br/divulga/rest/arquivo/img/2040602022/${sq}/BR`;
+
+/** Ordem: foto empacotada em photos/ (tools/photos.mjs) → foto oficial do TSE → iniciais. */
 export function Avatar({ c, lg }: { c: CandidateMeta; lg?: boolean }) {
+  const sources = [`${import.meta.env.BASE_URL}photos/${c.nr}.jpg`, ...(c.sq ? [TSE_PHOTO(c.sq)] : [])];
+  const [i, setI] = useState(0);
   return (
     <span className={`avatar${lg ? ' lg' : ''}`} style={{ background: c.color }} aria-hidden>
-      {initials(c.name)}
+      {i < sources.length ? (
+        <img src={sources[i]} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setI(i + 1)} />
+      ) : initials(c.name)}
     </span>
   );
 }

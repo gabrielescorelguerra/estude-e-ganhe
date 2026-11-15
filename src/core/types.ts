@@ -1,5 +1,7 @@
 export interface CandidateMeta {
   nr: number;
+  /** SQ_CANDIDATO do TSE, usado para localizar a foto oficial */
+  sq?: string;
   name: string;
   fullName: string;
   party: string;

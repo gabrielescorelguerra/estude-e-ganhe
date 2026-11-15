@@ -113,7 +113,7 @@ const exterior = { 1: {}, 2: {} };
     if (!cand.has(nr)) {
       const urna = r.NM_URNA_CANDIDATO;
       cand.set(nr, {
-        nr, name: DISPLAY[urna] ?? titleCase(urna), fullName: titleCase(r.NM_CANDIDATO),
+        nr, sq: r.SQ_CANDIDATO, name: DISPLAY[urna] ?? titleCase(urna), fullName: titleCase(r.NM_CANDIDATO),
         party: r.SG_PARTIDO, partyName: r.NM_PARTIDO, color: COLORS[nr] ?? FALLBACK,
       });
     }
