@@ -206,7 +206,6 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .uf:hover { stroke: var(--ink); stroke-width: 1.8; }
 .uf.sel { stroke: var(--ink); stroke-width: 2.2; }
 .uf.dim { fill: var(--map-empty) !important; fill-opacity: 1 !important; pointer-events: none; }
-.uf.flipped { stroke: var(--study-fill); stroke-width: 2.6; }
 .mun { stroke: var(--map-line); stroke-width: 0.35; cursor: pointer; vector-effect: non-scaling-stroke; }
 .mun:hover { stroke: var(--ink); stroke-width: 1.2; }
 .mun.sel { stroke: var(--ink); stroke-width: 1.8; }
@@ -357,8 +356,6 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .page > :nth-child(n + 6), .study-page > :nth-child(n + 6) { animation-delay: 0.25s; }
 .uf.reveal, .mun.reveal { animation: reveal 0.5s ease both; }
 .uf, .mun { transition: fill 0.35s, fill-opacity 0.35s, stroke-width 0.15s; }
-.uf.flipped { animation: pulse 2.4s ease-in-out 1; }
-@keyframes pulse { 0%, 100% { stroke-opacity: 1; } 40% { stroke-opacity: 0.35; } }
 .card, .goal-row, .wallet-row, .facts { transition: box-shadow 0.2s, transform 0.2s; }
 @media (hover: hover) { .stat:hover, .hero:hover { box-shadow: var(--sh-2); } }
 .bar > i, .spark i { animation: grow 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

@@ -107,11 +107,6 @@ export function BrazilMap({ election, game }: Props) {
     return w ? `${election.candidates[w.nr].name} · ${fmtPct(w.share)}` : 'sem votos';
   };
 
-  const flipped = (id: string) => {
-    const t = ufTally[id];
-    return !!t && sum(t.study) + sum(t.opp) > 0 && winnerOf(t.sim)?.nr !== winnerOf(t.off)?.nr;
-  };
-
   return (
     <div className="map-area" ref={wrap} onMouseLeave={() => setTip(null)}>
       {err && <div className="error">Não foi possível carregar o mapa. <button className="btn ghost small" onClick={() => location.reload()}>Tentar de novo</button></div>}
@@ -127,7 +122,7 @@ export function BrazilMap({ election, game }: Props) {
               const hide = isSel && munPaths.length > 0;
               return (
                 <path key={u.id} d={u.d} fill={pa.fill} fillOpacity={hide ? 0 : pa.opacity}
-                  style={{ animationDelay: `${i * 14}ms` }} className={`uf reveal${isSel ? ' sel' : ''}${selUf && !isSel ? ' dim' : ''}${mode === 'simulado' && flipped(u.id) ? ' flipped' : ''}`}
+                  style={{ animationDelay: `${i * 14}ms` }} className={`uf reveal${isSel ? ' sel' : ''}${selUf && !isSel ? ' dim' : ''}`}
                   onClick={() => select(isSel ? null : u.id)}
                   onMouseMove={(e) => move(e, [u.name, describe(mode === 'oficial' ? t.off : mode === 'estudo' ? t.study : t.sim)])}
                   onMouseLeave={() => setTip(null)} />
@@ -196,7 +191,7 @@ function Legend({ election, game }: Props) {
             ))}
           </div>
           <div className="legend-row"><span>Cor = vencedor · intensidade = margem</span>
-            {mode === 'simulado' && <span><i style={{ width: 14, height: 10, border: '2px solid var(--study-fill)', borderRadius: 2, display: 'inline-block' }} />resultado virado por você</span>}</div>
+</div>
         </>
       )}
     </div>
