@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Ingestão de dados — Presidente 2022
+ * Ingestão de dados — Presidente (2022, 2018, 2014, 2010…)
  *
  * Fontes:
  *  - Resultados: TSE, Dados Abertos (votacao_candidato_munzona_2022.zip), licença CC-BY.
  *  - Malhas municipais: tbrugz/geodata-br (derivado das malhas do IBGE).
  *
- * Uso: node tools/ingest.mjs [--zip caminho.zip] [--geo caminho.json]
+ * Uso: node tools/ingest.mjs [--year 2022] [--zip caminho.zip] [--geo caminho.json]
  * Sem argumentos, baixa os arquivos para .cache/ (ignorado pelo git).
  *
- * Saída: public/data/2022/presidente/*  e  public/geo/*
+ * Saída: public/data/{ano}/presidente/*, public/data/elections.json e (só em 2022) public/geo/*
  * O app NÃO acessa o TSE em tempo de execução: usa este snapshot validado.
  */
 import { spawn, execFileSync } from 'node:child_process';
@@ -28,7 +28,8 @@ const arg = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : nu
 const CACHE = join(ROOT, '.cache');
 mkdirSync(CACHE, { recursive: true });
 
-const ZIP_URL = 'https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_candidato_munzona/votacao_candidato_munzona_2022.zip';
+const YEAR = Number(arg('--year') ?? 2022);
+const ZIP_URL = `https://cdn.tse.jus.br/estatistica/sead/odsele/votacao_candidato_munzona/votacao_candidato_munzona_${YEAR}.zip`;
 const GEO_URL = 'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-100-mun.json';
 
 function ensure(path, url) {
@@ -77,10 +78,14 @@ function lev(a, b) {
 }
 
 // ---------- cores e nomes de exibição ----------
-const COLORS = {
-  13: '#B8323A', 22: '#24508F', 12: '#7D5BA6', 15: '#2F8F83', 44: '#C9708A', 30: '#B0742F',
+// Uma cor por partido (consistente entre as eleições); partidos sem cor própria usam uma paleta neutra.
+const PARTY_COLORS = {
+  PT: '#B8323A', PL: '#24508F', PSL: '#24508F', PSDB: '#2E86AB', PDT: '#7D5BA6', MDB: '#2F8F83', PMDB: '#2F8F83',
+  PSB: '#D9803A', REDE: '#4C9A52', PSOL: '#B03A8C', NOVO: '#C26A2E', PV: '#6B9B2E', PPS: '#C9708A', DEM: '#5B7F95',
+  'UNIÃO': '#B09A2E', PCB: '#8A2B2B', PSTU: '#A33A3A', UP: '#8A2B2B', DC: '#7A7A52', PTB: '#6E6E88', PRTB: '#7A6A52',
 };
-const FALLBACK = '#8C887D';
+const NEUTRALS = ['#8C887D', '#8E6F4A', '#5E7D8C', '#7C6A8E', '#6F8A5E', '#9A7B6B'];
+const colorFor = (party, nr) => PARTY_COLORS[party] ?? NEUTRALS[nr % NEUTRALS.length];
 const titleCase = (s) =>
   s.toLowerCase().split(' ').map((w) => (['de', 'da', 'do', 'dos', 'das', 'e'].includes(w) ? w : w[0].toUpperCase() + w.slice(1))).join(' ');
 const DISPLAY = { 'FELIPE D AVILA': "Felipe d'Avila", 'LÉO PÉRICLES': 'Léo Péricles', 'LULA': 'Lula', 'VERA': 'Vera' };
@@ -104,20 +109,26 @@ function csvRows(file) {
 console.log('lendo resultados do TSE…');
 const cand = new Map(); // nr -> meta
 const munVotes = {}; // key -> {uf, tse, name, v:{1:{nr:votes},2:{...}}}
-const exterior = { 1: {}, 2: {} };
+// lugares que não são UF: exterior (ZZ) e, em eleições antigas, voto em trânsito (VT)
+const special = { ZZ: { 1: {}, 2: {} }, VT: { 1: {}, 2: {} } };
+const SPECIAL_INFO = { ZZ: ['Exterior', 'exterior'], VT: ['Voto em trânsito', 'transit'] };
 {
   // BRASIL.csv contém todas as UF + exterior (ZZ), por município e zona
-  const rows = await csvRows('votacao_candidato_munzona_2022_BRASIL.csv');
+  const rows = await csvRows(`votacao_candidato_munzona_${YEAR}_BRASIL.csv`);
   for (const r of rows) {
     const nr = +r.NR_CANDIDATO, turno = +r.NR_TURNO, votos = +r.QT_VOTOS_NOMINAIS;
     if (!cand.has(nr)) {
       const urna = r.NM_URNA_CANDIDATO;
       cand.set(nr, {
-        nr, sq: r.SQ_CANDIDATO, name: DISPLAY[urna] ?? titleCase(urna), fullName: titleCase(r.NM_CANDIDATO),
-        party: r.SG_PARTIDO, partyName: r.NM_PARTIDO, color: COLORS[nr] ?? FALLBACK,
+        nr, sq: YEAR === 2022 ? r.SQ_CANDIDATO : undefined, name: DISPLAY[urna] ?? titleCase(urna), fullName: titleCase(r.NM_CANDIDATO),
+        party: r.SG_PARTIDO, partyName: r.NM_PARTIDO, color: colorFor(r.SG_PARTIDO, nr),
       });
     }
-    if (r.SG_UF === 'ZZ') { exterior[turno][nr] = (exterior[turno][nr] ?? 0) + votos; continue; }
+    if (!UFS[r.SG_UF]) {
+      const sp = (special[r.SG_UF] ??= { 1: {}, 2: {} });
+      sp[turno][nr] = (sp[turno][nr] ?? 0) + votos;
+      continue;
+    }
     const key = `${r.SG_UF}:${r.CD_MUNICIPIO}`;
     const m = (munVotes[key] ??= { uf: r.SG_UF, tse: r.CD_MUNICIPIO, name: r.NM_MUNICIPIO, v: { 1: {}, 2: {} } });
     m.v[turno][nr] = (m.v[turno][nr] ?? 0) + votos;
@@ -130,7 +141,7 @@ const rounds = [];
 for (const t of [1, 2]) {
   const tot = {};
   for (const m of Object.values(munVotes)) for (const [nr, v] of Object.entries(m.v[t])) tot[nr] = (tot[nr] ?? 0) + v;
-  for (const [nr, v] of Object.entries(exterior[t])) tot[nr] = (tot[nr] ?? 0) + v;
+  for (const sp of Object.values(special)) for (const [nr, v] of Object.entries(sp[t])) tot[nr] = (tot[nr] ?? 0) + v;
   const order = Object.keys(tot).map(Number).sort((a, b) => tot[b] - tot[a]);
   rounds.push({ round: t, candidates: order, totals: order.map((n) => tot[n]) });
 }
@@ -179,8 +190,8 @@ const out = (p, data) => {
   writeFileSync(full, typeof data === 'string' ? data : JSON.stringify(data));
 };
 
-// municípios por UF
-for (const [uf, [code]] of Object.entries(UFS)) {
+// municípios por UF (a malha é a mesma para todas as eleições: só é gravada ao ingerir 2022)
+if (YEAR === 2022) for (const [uf, [code]] of Object.entries(UFS)) {
   const geoms = topo.objects.m.geometries.filter((g) => g.properties.id.startsWith(code));
   let t = topology({ m: { type: 'FeatureCollection', features: geoms.map((g) => feature(topo, g)) } }, 1e5);
   t = presimplify(t);
@@ -190,6 +201,7 @@ for (const [uf, [code]] of Object.entries(UFS)) {
 }
 
 // UFs: união dos municípios
+if (YEAR === 2022) {
 const ufFeatures = Object.entries(UFS).map(([uf, [code, name]]) => {
   const geoms = topo.objects.m.geometries.filter((g) => g.properties.id.startsWith(code));
   return { type: 'Feature', properties: { id: uf, name }, geometry: merge(topo, geoms) };
@@ -199,6 +211,7 @@ ufTopo = presimplify(ufTopo);
 ufTopo = simplify(ufTopo, quantile(ufTopo, 0.3));
 ufTopo = quantize(ufTopo, 2e4);
 out('public/geo/ufs.json', ufTopo);
+}
 
 // ---------- 3. saída de dados ----------
 const arr = (obj, order) => order.map((nr) => obj[nr] ?? 0);
@@ -207,18 +220,23 @@ const places = Object.entries(UFS).map(([uf, [code, name]]) => {
   const votes = rounds.map((r) => r.candidates.map((nr) => ms.reduce((s, m) => s + (m.v[r.round][nr] ?? 0), 0)));
   return { id: uf, name, kind: 'uf', ibge: code, votes };
 });
-places.push({ id: 'ZZ', name: 'Exterior', kind: 'exterior', votes: rounds.map((r) => arr(exterior[r.round], r.candidates)) });
+for (const [id, sp] of Object.entries(special)) {
+  const info = SPECIAL_INFO[id] ?? [id, 'transit'];
+  const votes = rounds.map((r) => arr(sp[r.round], r.candidates));
+  if (votes.some((v) => v.some((x) => x > 0))) places.push({ id, name: info[0], kind: info[1], votes });
+}
 
 const manifest = {
   schema: 1,
-  id: '2022-presidente',
-  year: 2022,
+  id: `${YEAR}-presidente`,
+  path: `${YEAR}/presidente`,
+  year: YEAR,
   cargo: 'Presidente',
-  title: 'Eleição presidencial 2022',
+  title: `Eleição presidencial ${YEAR}`,
   source: {
     publisher: 'Tribunal Superior Eleitoral (TSE) — Dados Abertos',
-    dataset: 'Resultados 2022 · votação por candidato, município e zona',
-    url: 'https://dadosabertos.tse.jus.br/dataset/resultados-2022',
+    dataset: `Resultados ${YEAR} · votação por candidato, município e zona`,
+    url: `https://dadosabertos.tse.jus.br/dataset/resultados-${YEAR}`,
     license: 'CC-BY',
     geometry: 'Malhas municipais do IBGE, via tbrugz/geodata-br',
     generatedAt: new Date().toISOString().slice(0, 10),
@@ -228,7 +246,7 @@ const manifest = {
   rounds: rounds.map(({ round: r, candidates, totals }) => ({ round: r, candidates, totals })),
   places,
 };
-out('public/data/2022/presidente/election.json', manifest);
+out(`public/data/${YEAR}/presidente/election.json`, manifest);
 
 for (const [uf, [code]] of Object.entries(UFS)) {
   const items = [];
@@ -238,7 +256,7 @@ for (const [uf, [code]] of Object.entries(UFS)) {
     if (!id) continue;
     items.push([id, ibgeName.get(id), ...rounds.map((r) => arr(m.v[r.round], r.candidates))]);
   }
-  out(`public/data/2022/presidente/mun/${uf}.json`, { uf, items });
+  out(`public/data/${YEAR}/presidente/mun/${uf}.json`, { uf, items });
 }
 
 // ---------- 4. verificação contra totais oficiais ----------
@@ -249,9 +267,26 @@ for (const r of rounds) {
     r.candidates.slice(0, 2).map((n, i) => `${cand.get(n).name} ${r.totals[i].toLocaleString('pt-BR')}`).join(' | '));
   if (!ok) process.exitCode = 1;
 }
-const OFFICIAL = { 1: { 13: 57259504, 22: 51072345 }, 2: { 13: 60345999, 22: 58206354 } };
-for (const r of rounds) for (const [nr, v] of Object.entries(OFFICIAL[r.round])) {
+// totais oficiais conhecidos (nº do candidato -> votos nominais) para conferir a ingestão
+const OFFICIAL = {
+  2022: { 1: { 13: 57259504, 22: 51072345 }, 2: { 13: 60345999, 22: 58206354 } },
+  2018: { 1: { 17: 49277010, 13: 31342051 }, 2: { 17: 57797847, 13: 47040906 } },
+  2014: { 2: { 13: 54501118, 45: 51041155 } },
+  2010: { 2: { 13: 55752529, 45: 43711388 } },
+}[YEAR] ?? {};
+for (const r of rounds) for (const [nr, v] of Object.entries(OFFICIAL[r.round] ?? {})) {
   const got = r.totals[r.candidates.indexOf(Number(nr))];
-  if (got !== v) { console.error(`ERRO: turno ${r.round} candidato ${nr}: ${got} != oficial ${v}`); process.exitCode = 1; }
+  if (got !== v) { console.error(`DIVERGÊNCIA: turno ${r.round} candidato ${nr}: ${got} != oficial ${v}`); process.exitCode = 1; }
+  else console.log(`conferido: turno ${r.round}, candidato ${nr} = ${v.toLocaleString('pt-BR')}`);
+}
+
+// índice de eleições disponíveis (lido pelo app)
+{
+  const idxPath = join(ROOT, 'public/data/elections.json');
+  const idx = existsSync(idxPath) ? JSON.parse(readFileSync(idxPath, 'utf8')) : [];
+  const finalists = (rounds[1] ?? rounds[0]).candidates.slice(0, 2).map((n) => cand.get(n).name);
+  const entry = { id: manifest.id, path: manifest.path, year: YEAR, cargo: 'Presidente', title: manifest.title, finalists, winner: finalists[0] };
+  const next = [...idx.filter((e) => e.id !== entry.id), entry].sort((a, b) => b.year - a.year);
+  out('public/data/elections.json', next);
 }
 console.log('ok');

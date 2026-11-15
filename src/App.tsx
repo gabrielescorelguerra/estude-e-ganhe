@@ -4,8 +4,8 @@ import { Count } from './ui/motion';
 import { useEffect, useState } from 'react';
 import type { Election } from './core/types';
 import { applyStrategy, dayKey, elapsedSeconds, fmtClock, isRunning, secondsByDay, settleLosses, splitInt, sum, officialTally } from './core';
-import { loadElection } from './data/loader';
-import { useStore, useUi, type Tab } from './state/store';
+import { DEFAULT_ELECTION, loadElection } from './data/loader';
+import { selectCampaign, useStore, useUi, type Tab } from './state/store';
 import { useGame } from './state/useGame';
 import { HomePage } from './features/home/HomePage';
 import { SettingsPage } from './features/settings/SettingsPage';
@@ -25,8 +25,10 @@ const TABS: [Tab, string, () => ReactElement][] = [
 export default function App() {
   const [election, setElection] = useState<Election | null>(null);
   const [err, setErr] = useState(false);
-  const load = () => { setErr(false); loadElection().then(setElection).catch(() => setErr(true)); };
-  useEffect(load, []);
+  // a eleição carregada acompanha a campanha ativa (cada campanha tem a sua)
+  const wanted = useStore((s) => selectCampaign(s)?.electionId ?? DEFAULT_ELECTION);
+  const load = () => { setErr(false); loadElection(wanted).then(setElection).catch(() => setErr(true)); };
+  useEffect(load, [wanted]);
 
   if (err) return (
     <div className="error">
@@ -35,7 +37,7 @@ export default function App() {
       <button className="btn" onClick={load}>Tentar de novo</button>
     </div>
   );
-  if (!election) return <div className="loading">Carregando eleição…</div>;
+  if (!election || election.id !== wanted) return <div className="loading">Carregando eleição…</div>;
   return <MotionConfig reducedMotion="user"><Shell election={election} /></MotionConfig>;
 }
 

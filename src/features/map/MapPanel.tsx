@@ -69,7 +69,7 @@ function Country({ election, game }: { election: Election; game: Game }) {
           <tbody>
             {rows.map(({ p, w, added, flipped }) => (
               <tr key={p.id} onClick={() => select(p.id)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && select(p.id)}>
-                <td><b>{p.id === 'ZZ' ? 'EXT' : p.id}</b></td>
+                <td><b>{p.kind === 'uf' ? p.id : p.id === 'ZZ' ? 'EXT' : 'TRÂ'}</b></td>
                 <td><span className="res-name"><span className="dot" style={{ background: w ? election.candidates[w.nr].color : 'var(--rule)' }} />
                   <span className="t">{w ? election.candidates[w.nr].name : '—'}</span>{flipped && <span className="study-text" title="Virado pelos seus votos">●</span>}</span></td>
                 <td className="r">{w ? fmtPct(w.margin) : '—'}</td>
@@ -92,8 +92,8 @@ function Place({ election, game, uf, mun }: { election: Election; game: Game; uf
   const [rows, setRows] = useState<MunRow[] | null>(null);
   useEffect(() => {
     setRows(null);
-    if (uf !== 'ZZ') loadMunVotes('2022/presidente', uf).then(setRows).catch(() => setRows([]));
-  }, [uf]);
+    if (place.kind === 'uf') loadMunVotes(election.path, uf).then(setRows).catch(() => setRows([]));
+  }, [uf, election.path, place.kind]);
 
   const row = mun && rows ? rows.find((r) => r[0] === mun) : null;
   const placeId = mun ?? uf;
@@ -154,7 +154,7 @@ function Place({ election, game, uf, mun }: { election: Election; game: Game; uf
         <AllocBox election={election} game={game} placeId={placeId} gap={gap} />
       </section>
 
-      {uf !== 'ZZ' && !mun && (
+      {place.kind === 'uf' && !mun && (
         <section className="sect">
           <div className="sect-title"><span className="caps">Maiores municípios</span><span className="small faint">clique para detalhar</span></div>
           {!rows ? <p className="small faint">Carregando municípios…</p> : (

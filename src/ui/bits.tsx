@@ -17,7 +17,7 @@ const TSE_PHOTO = (sq: string) => `https://divulgacandcontas.tse.jus.br/divulga/
 
 /** Ordem: foto empacotada em photos/ (tools/photos.mjs) → foto oficial do TSE → iniciais. */
 export function Avatar({ c, lg }: { c: CandidateMeta; lg?: boolean }) {
-  const sources = [`${import.meta.env.BASE_URL}photos/${c.nr}.jpg`, ...(c.sq ? [TSE_PHOTO(c.sq)] : [])];
+  const sources = c.sq ? [`${import.meta.env.BASE_URL}photos/${c.nr}.jpg`, TSE_PHOTO(c.sq)] : []; // fotos só para 2022
   const [i, setI] = useState(0);
   return (
     <span className={`avatar${lg ? ' lg' : ''}`} style={{ background: c.color }} aria-hidden>

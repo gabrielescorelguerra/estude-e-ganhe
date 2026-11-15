@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { loadElection, loadElectionIndex, type ElectionMeta } from '../../data/loader';
 import type { Election, Round } from '../../core/types';
 import {
   DIFFICULTY_LABEL, FREE_RATE, addDays, dayKey, difficulty, fmtCompact, fmtDuration, fmtInt, fmtPct,
@@ -10,15 +11,27 @@ import { Avatar, Modal } from '../../ui/bits';
 
 type Mode = 'novo' | 'avancar' | 'replanejar';
 
-export function CampaignSetup({ election, mode, game }: { election: Election; mode: Mode; game: Game | null }) {
+export function CampaignSetup({ election: current, mode, game }: { election: Election; mode: Mode; game: Game | null }) {
   const { openCampaign } = useUi();
   const { addCampaign, patchCampaign, setDailyGoal, dailyGoalMin, campaigns } = useStore();
   const cancellable = campaigns.length > 0;
+  // eleição escolhida (só muda em campanha nova)
+  const [selId, setSelId] = useState(current.id);
+  const [election, setElection] = useState(current);
+  const [index, setIndex] = useState<ElectionMeta[]>([]);
+  useEffect(() => { loadElectionIndex().then(setIndex).catch(() => setIndex([])); }, []);
+  const loading = selId !== election.id;
   const replan = mode === 'replanejar' && game;
   const prev = game?.campaign;
 
   const [round, setRound] = useState<Round>(replan ? prev!.round : mode === 'avancar' ? 2 : 2);
   const r2 = election.rounds[1].candidates;
+  useEffect(() => {
+    if (selId === election.id) return;
+    let alive = true;
+    loadElection(selId).then((e) => { if (alive) { setElection(e); setFocus(e.rounds[1].candidates[1]); setRound(2); } }).catch(() => alive && setSelId(election.id));
+    return () => { alive = false; };
+  }, [selId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [focus, setFocus] = useState<number>(() => {
     if (replan) return prev!.focusNr;
     if (mode === 'avancar') return r2.includes(prev?.focusNr ?? -1) ? prev!.focusNr : r2[0];
@@ -78,15 +91,20 @@ export function CampaignSetup({ election, mode, game }: { election: Election; mo
             <div className="sect">
               <div className="step-h"><span className="n">1</span><span className="lbl">Eleição</span></div>
               <div className="choice">
-                <button aria-pressed><b>Presidente · 2022</b><span className="small muted">Dados oficiais do TSE</span></button>
-                <button disabled><b>Mais eleições</b><span className="small muted">Em breve: outros anos e cargos</span></button>
+                {(index.length ? index : [{ id: current.id, year: current.year, finalists: [], title: current.title } as unknown as ElectionMeta]).map((e) => (
+                  <button key={e.id} aria-pressed={selId === e.id} onClick={() => setSelId(e.id)}>
+                    <b>Presidente · {e.year}</b>
+                    <span className="small muted">{e.finalists.length ? `${e.finalists.join(' × ')}, 2º turno` : 'Dados oficiais do TSE'}</span>
+                  </button>
+                ))}
+                <button disabled><b>Governador e outros cargos</b><span className="small muted">Em breve</span></button>
               </div>
             </div>
             <div className="sect">
               <div className="step-h"><span className="n">2</span><span className="lbl">Turno</span></div>
               <div className="choice">
-                <button aria-pressed={round === 1} onClick={() => setRound(1)}><b>1º turno</b><span className="small muted">11 candidatos. Se chegar ao 2º turno, você avança.</span></button>
-                <button aria-pressed={round === 2} onClick={() => setRound(2)}><b>2º turno</b><span className="small muted">Lula × Bolsonaro, disputa direta.</span></button>
+                <button aria-pressed={round === 1} onClick={() => setRound(1)}><b>1º turno</b><span className="small muted">{election.rounds[0].candidates.length} candidatos. Se chegar ao 2º turno, você avança.</span></button>
+                <button aria-pressed={round === 2} onClick={() => setRound(2)}><b>2º turno</b><span className="small muted">{election.rounds[1].candidates.slice(0, 2).map((n) => election.candidates[n].name).join(' × ')}, disputa direta.</span></button>
               </div>
             </div>
           </>
@@ -172,7 +190,7 @@ export function CampaignSetup({ election, mode, game }: { election: Election; mo
       </div>
       <div className="actions">
         {(cancellable || replan) && <button className="btn ghost" onClick={() => openCampaign(null)}>Cancelar</button>}
-        <button className="btn" disabled={stuck} onClick={submit}>{replan ? 'Aplicar novo plano' : 'Começar campanha'}</button>
+        <button className="btn" disabled={stuck || loading} onClick={submit}>{replan ? 'Aplicar novo plano' : 'Começar campanha'}</button>
       </div>
     </Modal>
   );

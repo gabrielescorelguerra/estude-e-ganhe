@@ -19,7 +19,7 @@ export interface RoundInfo {
 export interface Place {
   id: string; // sigla da UF ("SP") ou "ZZ" (exterior)
   name: string;
-  kind: 'uf' | 'exterior';
+  kind: 'uf' | 'exterior' | 'transit';
   ibge?: string;
   /** votes[roundIndex][candidateIndex] */
   votes: number[][];
@@ -28,6 +28,8 @@ export interface Place {
 export interface Election {
   schema: number;
   id: string;
+  /** pasta dos dados: "2022/presidente" */
+  path: string;
   year: number;
   cargo: string;
   title: string;

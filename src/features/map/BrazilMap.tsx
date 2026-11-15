@@ -38,16 +38,16 @@ export function BrazilMap({ election, game }: Props) {
 
   useEffect(() => { loadUfGeo().then(setUfGeo).catch((e) => setErr(String(e))); }, []);
 
-  const selUf = uf && uf !== 'ZZ' ? uf : null;
+  const selUf = uf && election.places.find((p) => p.id === uf)?.kind === 'uf' ? uf : null;
   useEffect(() => {
     setMunGeo(null); setMunRows(null);
     if (!selUf) return;
     let alive = true;
-    Promise.all([loadMunGeo(selUf), loadMunVotes('2022/presidente', selUf)])
+    Promise.all([loadMunGeo(selUf), loadMunVotes(election.path, selUf)])
       .then(([g, r]) => { if (alive) { setMunGeo(g); setMunRows(r); } })
       .catch((e) => alive && setErr(String(e)));
     return () => { alive = false; };
-  }, [selUf]);
+  }, [selUf, election.path]);
 
   const proj = useMemo(() => {
     if (!ufGeo) return null;

@@ -30,7 +30,12 @@ function memo<T>(path: string): Promise<T> {
   return p;
 }
 
-export const loadElection = (id = '2022/presidente') => memo<Election>(`data/${id}/election.json`);
+export interface ElectionMeta { id: string; path: string; year: number; cargo: string; title: string; finalists: string[]; winner: string }
+export const DEFAULT_ELECTION = '2022-presidente';
+/** "2018-presidente" -> "2018/presidente" */
+export const electionPath = (id: string) => id.replace('-', '/');
+export const loadElectionIndex = () => memo<ElectionMeta[]>('data/elections.json');
+export const loadElection = (id: string = DEFAULT_ELECTION) => memo<Election>(`data/${electionPath(id)}/election.json`);
 
 export type GeoFC = FeatureCollection<Geometry, { id: string; name?: string }>;
 
