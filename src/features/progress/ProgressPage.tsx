@@ -77,7 +77,7 @@ export function ProgressPage({ election }: { election: Election }) {
       </section>
 
       <section className="sect">
-        <div className="sect-title"><h2 style={{ fontSize: 22 }}>Campanhas</h2><button className="btn ghost small" onClick={() => openCampaign('novo')}>Nova campanha</button></div>
+        <div className="sect-title"><h2 style={{ fontSize: 22 }}>Campanhas</h2><div style={{ display: 'flex', gap: 8 }}><button className="btn ghost small" onClick={() => openCampaign('retro')}>Retrospectiva</button><button className="btn ghost small" onClick={() => openCampaign('novo')}>Nova campanha</button></div></div>
         {campaigns.map((c) => {
           const cand = election.candidates[c.focusNr];
           const earned = sessions.reduce((a, s) => a + (s.campaignId === c.id ? s.votes : 0), 0);

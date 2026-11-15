@@ -404,3 +404,29 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .pdot.on { background: var(--study-fill); }
 .in.time { width: auto; padding: 6px 10px; font-variant-numeric: tabular-nums; }
 .in.time:disabled { opacity: 0.5; }
+
+/* ============ retrospectiva ============ */
+.retro { position: fixed; inset: 0; z-index: 25; background: var(--bg); display: grid; grid-template-rows: auto 1fr auto; padding-top: var(--safe-t); }
+.retro-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 22px; background: var(--surface); border-bottom: 1px solid var(--rule); box-shadow: var(--sh-1); }
+.retro-head h2 { font-size: 22px; margin-top: 2px; }
+.retro-body { display: grid; grid-template-columns: minmax(0, 1fr) 400px; min-height: 0; }
+.retro-map { min-height: 0; background: radial-gradient(ellipse at 40% 30%, var(--surface-2), var(--bg) 70%); }
+.retro-map svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 6px 10px rgb(23 23 26 / 0.12)); }
+.rt-uf { stroke: var(--map-line); stroke-width: 0.9; vector-effect: non-scaling-stroke; transition: fill 0.5s, fill-opacity 0.5s; }
+.rt-uf.blink { animation: blink 0.9s ease-out; }
+@keyframes blink { 0% { fill-opacity: 0.1; } 100% { } }
+.retro-side { overflow: auto; background: var(--surface); border-left: 1px solid var(--rule); padding: 20px 22px 30px; display: grid; gap: 20px; align-content: start; }
+.retro-day { display: grid; gap: 8px; }
+.retro-report { display: grid; gap: 8px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 14px; background: var(--surface-2); }
+.report-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.report-list li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--rule); font-size: 14px; }
+.report-list li:first-child { border-top: 0; }
+.retro-controls { display: flex; gap: 16px; align-items: center; padding: 12px 22px calc(12px + var(--safe-b)); background: var(--surface); border-top: 1px solid var(--rule); box-shadow: 0 -4px 14px -10px rgb(23 23 26 / 0.3); }
+.retro-controls input[type='range'] { flex: 1; min-width: 0; }
+@media (max-width: 860px) {
+  .retro-body { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 42%) minmax(0, 1fr); }
+  .retro-side { border-left: 0; border-top: 1px solid var(--rule); padding: 16px; }
+  .retro-head { padding: 10px 14px; }
+  .retro-controls { padding: 10px 14px calc(10px + var(--safe-b)); gap: 10px; }
+  .retro-controls .btn { padding: 8px 12px; }
+}

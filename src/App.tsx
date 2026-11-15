@@ -7,6 +7,8 @@ import { applyStrategy, dayKey, elapsedSeconds, fmtClock, isRunning, secondsByDa
 import { runSettlement } from './state/settle';
 import { pomoView } from './core';
 import { Toasts } from './ui/Toasts';
+import { Retrospective } from './features/retro/Retrospective';
+import { snapOf, sameSnap } from './core';
 import { chime } from './ui/sound';
 import { onServiceButton, setKeepAwake, syncPhaseAlarm, syncReminders, syncSessionService } from './platform/native';
 import { DEFAULT_ELECTION, loadElection } from './data/loader';
@@ -167,6 +169,14 @@ function Shell({ election }: { election: Election }) {
     openCampaign('derrota');
   }, [lost, game, patchCampaign, openCampaign]);
 
+  // histórico diário (alimenta a retrospectiva)
+  const recordHistory = useStore((s) => s.recordHistory);
+  useEffect(() => {
+    if (!camp) return;
+    const snap = snapOf(camp);
+    if (!sameSnap(camp.history?.[today], snap)) recordHistory(camp.id, today, snap);
+  }, [camp?.allocations, camp?.bonus, camp?.opposition, camp?.id, today]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // conquistas
   useEffect(() => {
     if (!game) return;
@@ -258,6 +268,7 @@ function Shell({ election }: { election: Election }) {
       {campaignModal === 'estrategia' && game && <StrategyModal game={game} />}
       {campaignModal === 'vitoria' && game && <VictoryModal election={election} game={game} />}
       {campaignModal === 'derrota' && game && <DefeatModal election={election} game={game} />}
+      {campaignModal === 'retro' && game && <Retrospective election={election} game={game} />}
       <SummaryModal election={election} game={game} />
     </div>
   );

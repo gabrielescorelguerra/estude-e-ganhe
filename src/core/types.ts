@@ -101,7 +101,12 @@ export interface Campaign {
   boost: { mult: number; until: string; label: string } | null;
   lastEventDay: string | null;
   feed: FeedItem[];
+  /** retrato do fim de cada dia, por estado: usado na retrospectiva */
+  history: Record<string, DaySnap>;
 }
+
+/** votos por "UF|candidato" */
+export interface DaySnap { s: Record<string, number>; o: Record<string, number> }
 
 export interface FeedItem {
   id: string;

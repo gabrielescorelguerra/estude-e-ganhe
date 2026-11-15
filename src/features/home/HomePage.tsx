@@ -67,6 +67,7 @@ export function HomePage({ election }: { election: Election }) {
             {active ? <>{running ? 'Continuar sessão' : 'Retomar sessão'} · <span className="num">{fmtClock(elapsedSeconds(active, now))}</span></> : <><IconPlay /> Começar a estudar</>}
           </button>
           <button className="btn ghost" onClick={() => setTab('mapa')}>Abrir o mapa</button>
+          <button className="btn ghost" onClick={() => openCampaign('retro')}>Retrospectiva</button>
         </div>
         {lastLoss && (
           <p className="small hero-warn">Último dia perdido ({fmtDate(new Date(lastLoss.day + 'T12:00').getTime())}): {rival.name} ganhou <b className="num opp-text">{fmtInt(lastLoss.votes)}</b> votos.</p>

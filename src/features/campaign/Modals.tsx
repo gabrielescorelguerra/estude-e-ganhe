@@ -65,7 +65,7 @@ export function VictoryModal({ election, game }: { election: Election; game: Gam
       </p>
       <p className="small muted">{fmtInt(game.earned)} votos de estudo em {c.days} dias planejados.</p>
       <div className="actions">
-        <button className="btn ghost" onClick={() => openCampaign(null)}>Ver o mapa</button>
+        <button className="btn ghost" onClick={() => openCampaign('retro')}>Ver retrospectiva</button>
         <button className="btn" onClick={() => openCampaign(first ? 'avancar' : 'novo')}>{first ? 'Começar o 2º turno' : 'Nova campanha'}</button>
       </div>
     </Modal>
@@ -88,6 +88,7 @@ export function DefeatModal({ election, game }: { election: Election; game: Game
         <p className="small muted">Você deixou de cumprir a meta em {c.losses.filter((l) => !l.free).length} dias ({fmtDuration(lostMin * 60)} a menos), o que deu {fmtInt(oppVotes)} votos à oposição.</p>
       )}
       <div className="actions">
+        <button className="btn ghost" onClick={() => openCampaign('retro')}>Ver retrospectiva</button>
         <button className="btn ghost" onClick={() => openCampaign('replanejar')}>Continuar com novo prazo</button>
         <button className="btn" onClick={() => openCampaign('novo')}>Nova campanha</button>
       </div>

@@ -199,3 +199,42 @@ describe('pomodoro', () => {
     expect(elapsedSeconds(back, t0 + 29 * MIN)).toBe(27 * 60);
   });
 });
+
+import { buildFrames, snapOf } from './timelapse';
+import type { Campaign, Session } from './types';
+describe('retrospectiva', () => {
+  const mkC = (extra: Partial<Campaign> = {}): Campaign => ({
+    id: 'c', createdAt: new Date('2026-11-10T12:00:00').getTime(), deadline: '2026-12-10', allocations: { 'SP|22': 600, '3550308|22': 400, 'RJ|22': 100 },
+    bonus: { 'SP|22': 100 }, opposition: { 'MG|13': 50 }, feed: [], history: {}, ...extra,
+  } as unknown as Campaign);
+  const sess = (day: string, votes: number): Session => ({ id: day, campaignId: 'c', label: '', start: new Date(day + 'T10:00:00').getTime(), end: 0, seconds: 3600, rate: 1, votes });
+  it('agrega por estado, incluindo municípios e bônus', () => {
+    expect(snapOf(mkC())).toEqual({ s: { 'SP|22': 1100, 'RJ|22': 100 }, o: { 'MG|13': 50 } });
+  });
+  it('sem histórico: estima pela curva de votos ganhos e termina no resultado atual', () => {
+    const r = buildFrames(mkC(), [sess('2026-11-10', 100), sess('2026-11-12', 300)], '2026-11-13');
+    expect(r.estimated).toBe(true);
+    expect(r.estimatedUntil).toBe('2026-11-13');
+    expect(r.frames.map((f) => f.day)).toEqual(['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13']);
+    expect(r.frames[0].study['SP|22']).toBe(Math.round(1100 * 0.25));
+    expect(r.frames[3].study['SP|22']).toBe(1100);
+    expect(r.frames[3].opp['MG|13']).toBe(50);
+    expect(r.frames[2].minutes).toBe(60);
+  });
+  it('com histórico: usa o último retrato até cada dia', () => {
+    const history = { '2026-11-10': { s: { 'SP|22': 10 }, o: {} }, '2026-11-12': { s: { 'SP|22': 500 }, o: {} } };
+    const r = buildFrames(mkC({ history }), [], '2026-11-13');
+    expect(r.estimated).toBe(false);
+    expect(r.frames.map((f) => f.study['SP|22'])).toEqual([10, 10, 500, 1100]);
+    expect(r.estimatedUntil).toBeNull();
+  });
+  it('histórico que começa no meio: estima só os dias anteriores', () => {
+    const history = { '2026-11-12': { s: { 'SP|22': 800 }, o: {} } };
+    const r = buildFrames(mkC({ history }), [sess('2026-11-10', 100), sess('2026-11-11', 100), sess('2026-11-12', 200)], '2026-11-13');
+    expect(r.estimatedUntil).toBe('2026-11-11');
+    expect(r.frames[0].study['SP|22']).toBe(200);
+    expect(r.frames[1].study['SP|22']).toBe(400);
+    expect(r.frames[2].study['SP|22']).toBe(800);
+    expect(r.frames[3].study['SP|22']).toBe(1100);
+  });
+});

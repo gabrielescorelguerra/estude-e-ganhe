@@ -10,3 +10,4 @@ export * from './rival';
 export * from './badges';
 export { effectiveRate, rollEvent, rng, EVENT_CHANCE, EVENT_MIN_GAP_DAYS } from './events';
 export * from './pomodoro';
+export * from './timelapse';

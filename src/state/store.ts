@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { ActiveSession, Campaign, FeedItem, Loss, Session, StrategyConfig } from '../core/types';
+import type { ActiveSession, Campaign, DaySnap, FeedItem, Loss, Session, StrategyConfig } from '../core/types';
 import { effectiveRate } from '../core/events';
 import { DEFAULT_POMODORO, advance, newPomo, skipBreak as skipBreakCore, type PhaseEvent, type PomodoroConfig } from '../core/pomodoro';
 import { addDays, dayKey } from '../core/plan';
@@ -44,8 +44,9 @@ interface Actions {
   importAll: (json: string) => boolean;
   resetAll: () => void;
 
-  addCampaign: (c: Omit<Campaign, 'id' | 'createdAt' | 'allocations' | 'status' | 'strategy' | 'opposition' | 'settledThrough' | 'lastFreeDay' | 'losses' | 'bonus' | 'snapshot' | 'boost' | 'lastEventDay' | 'feed'> & Partial<Pick<Campaign, 'strategy'>>) => string;
+  addCampaign: (c: Omit<Campaign, 'id' | 'createdAt' | 'allocations' | 'status' | 'strategy' | 'opposition' | 'settledThrough' | 'lastFreeDay' | 'losses' | 'bonus' | 'snapshot' | 'boost' | 'lastEventDay' | 'feed' | 'history'> & Partial<Pick<Campaign, 'strategy'>>) => string;
   applySettlement: (campaignId: string, p: Settlement) => void;
+  recordHistory: (campaignId: string, day: string, snap: DaySnap) => void;
   unlockBadges: (ids: string[]) => void;
   setPomodoro: (p: Partial<PomodoroConfig>) => void;
   setReminders: (p: Partial<RemindersConfig>) => void;
@@ -172,7 +173,7 @@ export const useStore = create<Store>()(
         const camp: Campaign = {
           ...c, strategy: c.strategy ?? { kind: 'manual' }, id, createdAt: Date.now(), allocations: {}, status: 'ativa',
           opposition: {}, losses: [], lastFreeDay: null, settledThrough: addDays(dayKey(Date.now()), -1),
-          bonus: {}, snapshot: {}, boost: null, lastEventDay: null, feed: [],
+          bonus: {}, snapshot: {}, boost: null, lastEventDay: null, feed: [], history: {},
         };
         set({ campaigns: [camp, ...get().campaigns], activeCampaignId: id });
         return id;
@@ -197,6 +198,8 @@ export const useStore = create<Store>()(
             };
           }),
         }),
+      recordHistory: (campaignId, day, snap) =>
+        set({ campaigns: get().campaigns.map((c) => (c.id === campaignId ? { ...c, history: { ...c.history, [day]: snap } } : c)) }),
       unlockBadges: (ids) => set({ badges: { ...get().badges, ...Object.fromEntries(ids.map((id) => [id, Date.now()])) } }),
       selectCampaign: (id) => set({ activeCampaignId: id }),
       patchCampaign: (id, patch) =>
@@ -236,7 +239,7 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'estude-e-ganhe/v1',
-      version: 4,
+      version: 5,
       migrate: (persisted) => {
         const st = persisted as PersistedState;
         const today = dayKey(Date.now());
@@ -245,7 +248,7 @@ export const useStore = create<Store>()(
           penalty: c.penalty ?? false, opposition: c.opposition ?? {}, losses: c.losses ?? [], lastFreeDay: c.lastFreeDay ?? null,
           settledThrough: c.settledThrough ?? addDays(today, -1),
           bonus: c.bonus ?? {}, reactive: c.reactive ?? false, eventsOn: c.eventsOn ?? false, snapshot: c.snapshot ?? { ...c.allocations },
-          boost: c.boost ?? null, lastEventDay: c.lastEventDay ?? null, feed: c.feed ?? [],
+          boost: c.boost ?? null, lastEventDay: c.lastEventDay ?? null, feed: c.feed ?? [], history: c.history ?? {},
           status: (c.status as string) === 'expirada' ? 'derrota' : c.status,
         }));
         st.badges = st.badges ?? {};
@@ -284,7 +287,7 @@ interface UiState {
   select: (uf: string | null, mun?: string | null) => void;
   mode: MapMode;
   setMode: (m: MapMode) => void;
-  campaignModal: null | 'novo' | 'replanejar' | 'avancar' | 'estrategia' | 'vitoria' | 'derrota';
+  campaignModal: null | 'novo' | 'replanejar' | 'avancar' | 'estrategia' | 'vitoria' | 'derrota' | 'retro';
   openCampaign: (m: UiState['campaignModal']) => void;
   summary: Session | null;
   setSummary: (s: Session | null) => void;
