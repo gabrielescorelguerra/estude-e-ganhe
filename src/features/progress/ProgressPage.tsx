@@ -100,16 +100,6 @@ export function ProgressPage({ election }: { election: Election }) {
         {sessions.length > 40 && <p className="small faint">Mostrando as 40 mais recentes.</p>}
       </section>
 
-      <section className="sect">
-        <h2 style={{ fontSize: 22 }}>Sobre os dados</h2>
-        <p className="small muted">
-          <b>Oficial:</b> resultados do {election.source.publisher}, conjunto “{election.source.dataset}”, licença {election.source.license},
-          snapshot de {new Date(election.source.generatedAt + 'T12:00').toLocaleDateString('pt-BR')}. {election.source.note}{' '}
-          <a href={election.source.url} target="_blank" rel="noreferrer">Fonte</a>.
-        </p>
-        <p className="small muted"><b>Fictício:</b> os votos de estudo existem só neste app, ficam no seu aparelho e nunca alteram nem representam a apuração oficial.</p>
-        <p className="small muted"><b>Mapas:</b> {election.source.geometry}. Alguns municípios criados depois dessa malha não aparecem no mapa, mas contam nos totais do estado.</p>
-      </section>
     </div>
   );
 }

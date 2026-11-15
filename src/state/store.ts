@@ -15,7 +15,10 @@ export interface PersistedState {
   activeCampaignId: string | null;
   dailyGoalMin: number;
   labels: string[];
+  theme: Theme;
 }
+
+export type Theme = 'auto' | 'claro' | 'escuro';
 
 interface Actions {
   start: (label: string) => void;
@@ -26,6 +29,9 @@ interface Actions {
   setLabel: (label: string) => void;
   deleteSession: (id: string) => void;
   setDailyGoal: (min: number) => void;
+  setTheme: (t: Theme) => void;
+  importAll: (json: string) => boolean;
+  resetAll: () => void;
 
   addCampaign: (c: Omit<Campaign, 'id' | 'createdAt' | 'allocations' | 'status' | 'strategy' | 'opposition' | 'settledThrough' | 'lastFreeDay' | 'losses'> & Partial<Pick<Campaign, 'strategy'>>) => string;
   settle: (campaignId: string, r: { losses: Loss[]; settledThrough: string; lastFreeDay: string | null }, placements: Placement[]) => void;
@@ -48,6 +54,7 @@ export const useStore = create<Store>()(
       activeCampaignId: null,
       dailyGoalMin: 90,
       labels: [],
+      theme: 'auto',
 
       start: (label) => {
         if (get().active) return;
@@ -87,6 +94,20 @@ export const useStore = create<Store>()(
       discard: () => set({ active: null }),
       deleteSession: (id) => set({ sessions: get().sessions.filter((s) => s.id !== id) }),
       setDailyGoal: (min) => set({ dailyGoalMin: Math.max(5, Math.min(720, Math.round(min))) }),
+
+      setTheme: (theme) => set({ theme }),
+      importAll: (json) => {
+        try {
+          const d = JSON.parse(json) as Partial<PersistedState> & { app?: string };
+          if (d.app !== 'estude-e-ganhe' || !Array.isArray(d.sessions) || !Array.isArray(d.campaigns)) return false;
+          set({
+            sessions: d.sessions, campaigns: d.campaigns, activeCampaignId: d.activeCampaignId ?? d.campaigns[0]?.id ?? null,
+            dailyGoalMin: d.dailyGoalMin ?? 90, labels: d.labels ?? [], active: null,
+          });
+          return true;
+        } catch { return false; }
+      },
+      resetAll: () => set({ sessions: [], active: null, campaigns: [], activeCampaignId: null, labels: [] }),
 
       addCampaign: (c) => {
         const id = uid();
@@ -159,7 +180,7 @@ export const useStore = create<Store>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         sessions: s.sessions, active: s.active, campaigns: s.campaigns,
-        activeCampaignId: s.activeCampaignId, dailyGoalMin: s.dailyGoalMin, labels: s.labels,
+        activeCampaignId: s.activeCampaignId, dailyGoalMin: s.dailyGoalMin, labels: s.labels, theme: s.theme,
       }),
     },
   ),
@@ -174,7 +195,7 @@ export const earnedVotes = (sessions: Session[], campaignId: string) =>
 export const walletOf = (s: PersistedState, c: Campaign) => earnedVotes(s.sessions, c.id) - allocatedTotal(c);
 
 // ---- UI efêmera ----
-export type Tab = 'estudar' | 'mapa' | 'progresso';
+export type Tab = 'inicio' | 'estudar' | 'mapa' | 'progresso' | 'ajustes';
 export type MapMode = 'simulado' | 'oficial' | 'estudo';
 
 interface UiState {
@@ -192,7 +213,7 @@ interface UiState {
 }
 
 export const useUi = create<UiState>((set) => ({
-  tab: 'estudar',
+  tab: 'inicio',
   setTab: (tab) => set({ tab }),
   uf: null,
   mun: null,

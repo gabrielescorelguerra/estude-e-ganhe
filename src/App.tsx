@@ -1,9 +1,13 @@
+import type { ReactElement } from 'react';
 import { useEffect, useState } from 'react';
 import type { Election } from './core/types';
 import { applyStrategy, dayKey, elapsedSeconds, fmtClock, fmtInt, isRunning, secondsByDay, settleLosses, splitInt, sum, officialTally } from './core';
 import { loadElection } from './data/loader';
 import { useStore, useUi, type Tab } from './state/store';
 import { useGame } from './state/useGame';
+import { HomePage } from './features/home/HomePage';
+import { SettingsPage } from './features/settings/SettingsPage';
+import { IconChart, IconGear, IconHome, IconMap, IconTimer } from './ui/icons';
 import { StudyPage } from './features/timer/StudyPage';
 import { useNow } from './features/timer/useNow';
 import { MapPage } from './features/map/MapPage';
@@ -11,7 +15,10 @@ import { ProgressPage } from './features/progress/ProgressPage';
 import { CampaignSetup } from './features/campaign/CampaignSetup';
 import { DefeatModal, StrategyModal, SummaryModal, VictoryModal } from './features/campaign/Modals';
 
-const TABS: [Tab, string][] = [['estudar', 'Estudar'], ['mapa', 'Mapa'], ['progresso', 'Progresso']];
+const TABS: [Tab, string, () => ReactElement][] = [
+  ['inicio', 'Início', IconHome], ['estudar', 'Estudar', IconTimer], ['mapa', 'Mapa', IconMap],
+  ['progresso', 'Progresso', IconChart], ['ajustes', 'Ajustes', IconGear],
+];
 
 export default function App() {
   const [election, setElection] = useState<Election | null>(null);
@@ -33,6 +40,11 @@ export default function App() {
 function Shell({ election }: { election: Election }) {
   const { tab, setTab, campaignModal, openCampaign } = useUi();
   const game = useGame(election);
+  const theme = useStore((s) => s.theme);
+  useEffect(() => {
+    const r = document.documentElement;
+    if (theme === 'auto') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', theme === 'claro' ? 'light' : 'dark');
+  }, [theme]);
   const { place, setStrategy, patchCampaign, campaigns, settle, sessions } = useStore();
   const [today, setToday] = useState(() => dayKey(Date.now()));
   useEffect(() => {
@@ -92,7 +104,10 @@ function Shell({ election }: { election: Election }) {
     <div className="app">
       <header className="header">
         <div className="header-in">
-          <span className="brand">Estude <i>&amp;</i> Ganhe</span>
+          <span className="brand">
+            <svg viewBox="0 0 512 512" aria-hidden><rect width="512" height="512" rx="112" fill="#17171a" /><circle cx="256" cy="246" r="150" fill="none" stroke="#f0b52e" strokeWidth="32" /><path d="M256 246V140M256 246l72 44" fill="none" stroke="#f1f1ee" strokeWidth="32" strokeLinecap="round" /></svg>
+            <span className="bt">Estude <i>&amp;</i> Ganhe</span>
+          </span>
           <nav className="nav" aria-label="Seções">
             {TABS.map(([t, l]) => <button key={t} aria-current={tab === t ? 'page' : undefined} onClick={() => setTab(t)}>{l}</button>)}
           </nav>
@@ -111,6 +126,8 @@ function Shell({ election }: { election: Election }) {
       </header>
 
       <main className="main">
+        {game && tab === 'inicio' && <HomePage election={election} />}
+        {tab === 'ajustes' && <SettingsPage election={election} />}
         {game && tab === 'estudar' && <StudyPage election={election} />}
         {game && tab === 'mapa' && <MapPage election={election} game={game} />}
         {tab === 'progresso' && <ProgressPage election={election} />}
@@ -119,7 +136,7 @@ function Shell({ election }: { election: Election }) {
 
       <Dock election={election} />
       <nav className="tabbar" aria-label="Seções">
-        {TABS.map(([t, l]) => <button key={t} aria-current={tab === t ? 'page' : undefined} onClick={() => setTab(t)}>{l}</button>)}
+        {TABS.map(([t, l, Icon]) => <button key={t} aria-current={tab === t ? 'page' : undefined} onClick={() => setTab(t)}><Icon /><span>{l}</span></button>)}
       </nav>
 
       {(campaignModal === 'novo' || campaignModal === 'avancar' || (campaignModal === 'replanejar' && game)) && (
