@@ -2,7 +2,9 @@ import type { Election, StrategyConfig } from '../../core/types';
 import { STRATEGY_INFO, fmtDuration, fmtInt } from '../../core';
 import { useStore, useUi } from '../../state/store';
 import type { Game } from '../../state/useGame';
+import { useEffect } from 'react';
 import { Modal } from '../../ui/bits';
+import { Count, celebrate } from '../../ui/motion';
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
@@ -53,6 +55,7 @@ export function VictoryModal({ election, game }: { election: Election; game: Gam
   const me = election.candidates[c.focusNr];
   const rival = election.candidates[game.goal.rivalNr];
   const first = c.round === 1;
+  useEffect(() => { void celebrate(); }, []);
   return (
     <Modal title={first ? 'Você avançou ao 2º turno' : 'Vitória na simulação'} onClose={() => openCampaign(null)}>
       <p>
@@ -99,8 +102,8 @@ export function SummaryModal({ election, game }: { election: Election; game: Gam
   return (
     <Modal title="Sessão concluída" onClose={() => setSummary(null)}>
       <div style={{ display: 'grid', gap: 6 }}>
-        <span className="serif" style={{ fontSize: 40, lineHeight: 1.1 }}>{fmtDuration(summary.seconds)}</span>
-        <span className="serif study-text" style={{ fontSize: 26 }}>+{fmtInt(summary.votes)} votos</span>
+        <span style={{ fontSize: 44, fontWeight: 300, letterSpacing: '-0.04em', lineHeight: 1.1 }}>{fmtDuration(summary.seconds)}</span>
+        <span className="study-text" style={{ fontSize: 28, fontWeight: 650, letterSpacing: '-0.03em' }}>+<Count value={summary.votes} /> votos</span>
         {c && <span className="small muted">para {election.candidates[c.focusNr].name} · {STRATEGY_INFO[c.strategy.kind].name === 'Manual'
           ? 'ficam no saldo até você distribuir no mapa.' : `distribuídos pela estratégia ${STRATEGY_INFO[c.strategy.kind].name.toLowerCase()}.`}</span>}
       </div>

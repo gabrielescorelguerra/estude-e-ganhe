@@ -5,6 +5,7 @@ import { diffDays, dayKey, minutesToGoal, penaltyVotes, STRATEGY_INFO, secondsBy
 import { useStore, useUi } from '../../state/store';
 import { useGame } from '../../state/useGame';
 import { useNow } from './useNow';
+import { Count } from '../../ui/motion';
 import { Avatar } from '../../ui/bits';
 
 export function StudyPage({ election }: { election: Election }) {
@@ -97,7 +98,7 @@ export function StudyPage({ election }: { election: Election }) {
               <Avatar c={focus} /> <span>{focus.name} contra {rival.name}.</span>
               {game.goal.reached
                 ? <b>Você superou {rival.name}.</b>
-                : <span>Faltam <b className="num">{fmtCompact(game.goal.needed)}</b> votos
+                : <span>Faltam <b className="num"><Count value={game.goal.needed} fmt={fmtCompact} /></b> votos
                   (≈ {fmtDuration(minutesToGoal(game.goal.needed, c.rate) * 60)} de estudo).</span>}
             </div>
             {c.penalty && c.status === 'ativa' && (() => {

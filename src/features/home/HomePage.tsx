@@ -7,6 +7,7 @@ import { useStore, useUi } from '../../state/store';
 import { useGame } from '../../state/useGame';
 import { useNow } from '../timer/useNow';
 import { ResultBars } from '../../ui/bits';
+import { Count } from '../../ui/motion';
 import { IconPlay } from '../../ui/icons';
 
 const greeting = () => {
@@ -55,7 +56,7 @@ export function HomePage({ election }: { election: Election }) {
             <h2>{goalTitle}</h2>
             <p className="muted">
               <b>{focus.name}</b> contra <b>{rival.name}</b>
-              {game.goal.reached ? '. Você superou o adversário.' : <>. Faltam <b className="num">{fmtCompact(game.goal.needed)}</b> votos, ≈ {fmtDuration(minutesToGoal(game.goal.needed, c.rate) * 60)} de estudo.</>}
+              {game.goal.reached ? '. Você superou o adversário.' : <>. Faltam <b className="num"><Count value={game.goal.needed} fmt={fmtCompact} /></b> votos, ≈ {fmtDuration(minutesToGoal(game.goal.needed, c.rate) * 60)} de estudo.</>}
             </p>
           </div>
           <div className="hero-day num"><span>Dia</span><b>{dayN}</b><span>de {c.days}</span></div>
@@ -92,14 +93,14 @@ export function HomePage({ election }: { election: Election }) {
           <span className="caps">Prazo</span>
           <b className="num">{Math.max(0, game.daysLeft)} {Math.abs(game.daysLeft) === 1 ? 'dia' : 'dias'}</b>
           <span className="small muted">1 min = <b className="num study-text">{fmtInt(c.rate)}</b> votos</span>
-          <span className="small muted">Saldo: <b className="num study-text">{fmtInt(Math.max(0, game.wallet))}</b></span>
+          <span className="small muted">Saldo: <b className="num study-text"><Count value={Math.max(0, game.wallet)} /></b></span>
         </div>
       </section>
 
       <div className="home-cols">
         <section className="card">
           <div className="sect-title"><h3>Placar nacional</h3><button className="link small" onClick={() => setTab('mapa')}>ver no mapa</button></div>
-          <ResultBars election={election} order={election.rounds[c.round - 1].candidates} official={game.official} study={game.study} opp={game.opp} focusNr={c.focusNr} limit={c.round === 1 ? 4 : 2} />
+          <ResultBars election={election} order={election.rounds[c.round - 1].candidates} official={game.official} study={game.study} opp={game.opp} mode="simulado" focusNr={c.focusNr} limit={c.round === 1 ? 4 : 2} />
         </section>
         <section className="card">
           <div className="sect-title"><h3>Últimas sessões</h3><button className="link small" onClick={() => setTab('progresso')}>histórico</button></div>

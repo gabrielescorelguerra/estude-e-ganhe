@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import type { CandidateMeta, Election, Tally } from '../core/types';
 import { fmtInt, fmtPct } from '../core/format';
-import { rank, sum } from '../core';
+import { rank } from '../core';
+import type { MapMode } from '../state/store';
+import { Count } from './motion';
 
 export function initials(name: string) {
   const w = name.replace(/['’]/g, ' ').split(' ').filter((x) => x.length > 1 || /[A-Z]/.test(x));
@@ -34,26 +37,36 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref} style={wide ? { width: 'min(760px,100%)' } : undefined}>
+    <motion.div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+      <motion.div className="modal" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref} style={wide ? { width: 'min(760px,100%)' } : undefined}
+        initial={{ opacity: 0, y: 28, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: 'spring', stiffness: 380, damping: 32 }}>
         <h2>{title}</h2>
         {children}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
 /**
- * Barras de resultado. O trecho sólido é OFICIAL (TSE); o trecho hachurado é ESTUDO (fictício).
- * A largura é a participação sobre o total simulado do lugar.
+ * Barras de resultado, conforme o que o jogador escolheu ver:
+ *  - simulado: total (oficial + seus votos + oposição), com o acréscimo em listras na cor do candidato;
+ *  - oficial: só a apuração do TSE;
+ *  - estudo: só o que foi acrescentado.
  */
 export function ResultBars({
-  election, order, official, study, opp = {}, focusNr, limit = 6,
+  election, order, official, study, opp = {}, focusNr, limit = 6, mode = 'simulado',
 }: {
-  election: Election; order: number[]; official: Tally; study: Tally; opp?: Tally; focusNr?: number; limit?: number;
+  election: Election; order: number[]; official: Tally; study: Tally; opp?: Tally; focusNr?: number; limit?: number; mode?: MapMode;
 }) {
-  const total = sum(official) + sum(study) + sum(opp);
-  const ranked = rank(Object.fromEntries(order.map((nr) => [nr, (official[nr] ?? 0) + (study[nr] ?? 0) + (opp[nr] ?? 0)])));
+  const part = (nr: number) => ({
+    o: mode === 'estudo' ? 0 : official[nr] ?? 0,
+    s: mode === 'oficial' ? 0 : study[nr] ?? 0,
+    q: mode === 'oficial' ? 0 : opp[nr] ?? 0,
+  });
+  const val = (nr: number) => { const x = part(nr); return x.o + x.s + x.q; };
+  const total = order.reduce((a, nr) => a + val(nr), 0);
+  const ranked = rank(Object.fromEntries(order.map((nr) => [nr, val(nr)])));
   const rows = ranked.slice(0, limit);
   if (focusNr !== undefined && !rows.some(([nr]) => nr === focusNr)) {
     const f = ranked.find(([nr]) => nr === focusNr);
@@ -64,9 +77,10 @@ export function ResultBars({
     <div className="res">
       {rows.map(([nr, v]) => {
         const c = election.candidates[nr];
-        const o = official[nr] ?? 0, s = study[nr] ?? 0, q = opp[nr] ?? 0;
+        const { o, s, q } = part(nr);
+        const added = s + q;
         return (
-          <div className="res-row" key={nr}>
+          <div className="res-row" key={nr} style={{ ['--c' as string]: c.color }}>
             <div className="res-top">
               <span className="res-name">
                 <span className="dot" style={{ background: c.color }} />
@@ -75,13 +89,23 @@ export function ResultBars({
               </span>
               <span className="res-num"><b>{total ? fmtPct(v / total) : '—'}</b></span>
             </div>
-            <div className="res-bar" role="img" aria-label={`${c.name}: ${fmtInt(o)} votos oficiais, ${fmtInt(s)} de estudo`}>
-              <i style={{ width: `${total ? (o / total) * 100 : 0}%`, background: c.color }} />
-              {s > 0 && <i className="study" style={{ width: `${(s / total) * 100}%` }} />}
+            <div className="res-bar" role="img" aria-label={`${c.name}: ${fmtInt(v)} votos`}>
+              {o > 0 && <i style={{ width: `${total ? (o / total) * 100 : 0}%`, background: c.color }} />}
+              {s > 0 && <i className="added" style={{ width: `${(s / total) * 100}%` }} />}
               {q > 0 && <i className="opp" style={{ width: `${(q / total) * 100}%` }} />}
             </div>
             <div className="res-num">
-              {fmtInt(o)} oficiais{s > 0 && <> · <span className="study-text">+{fmtInt(s)} estudo</span></>}{q > 0 && <> · <span className="opp-text">+{fmtInt(q)} oposição</span></>}
+              {mode === 'oficial' && <><b><Count value={o} /></b> votos oficiais</>}
+              {mode === 'simulado' && (
+                <>
+                  <b><Count value={v} /></b> votos
+                  {s > 0 && <> · <span className="added-text"><b>+<Count value={s} /></b> seus</span></>}
+                  {q > 0 && <> · <span className="opp-text">+<Count value={q} /> oposição</span></>}
+                </>
+              )}
+              {mode === 'estudo' && (added > 0
+                ? <><b className="added-text">+<Count value={s} /></b> de estudo{q > 0 && <> · <span className="opp-text">+<Count value={q} /> oposição</span></>}</>
+                : <span className="faint">nenhum voto adicionado</span>)}
             </div>
           </div>
         );
@@ -92,5 +116,5 @@ export function ResultBars({
 }
 
 export const Tag = ({ kind }: { kind: 'official' | 'study' | 'opp' }) => (
-  <span className={`tag ${kind}`}>{kind === 'official' ? 'Oficial · TSE' : kind === 'study' ? 'Estudo · fictício' : 'Oposição · fictício'}</span>
+  <span className={`tag ${kind}`}>{kind === 'official' ? 'Oficial · TSE' : kind === 'study' ? 'Seus votos · fictício' : 'Oposição · fictício'}</span>
 );

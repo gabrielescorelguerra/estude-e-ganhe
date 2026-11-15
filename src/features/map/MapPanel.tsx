@@ -5,8 +5,17 @@ import {
 } from '../../core';
 import { loadMunVotes, type MunRow } from '../../data/loader';
 import type { Game } from '../../state/useGame';
-import { useStore, useUi } from '../../state/store';
+import { useStore, useUi, type MapMode } from '../../state/store';
 import { Avatar, ResultBars, Tag } from '../../ui/bits';
+
+function Tags({ mode }: { mode: MapMode }) {
+  return (
+    <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {mode !== 'estudo' && <Tag kind="official" />}
+      {mode !== 'oficial' && <Tag kind="study" />}
+    </span>
+  );
+}
 
 const flipGap = (sim: Tally, focus: number) => {
   const mine = sim[focus] ?? 0;
@@ -21,17 +30,19 @@ export function MapPanel({ election, game }: { election: Election; game: Game })
 }
 
 function Country({ election, game }: { election: Election; game: Game }) {
-  const { select } = useUi();
+  const { select, mode } = useUi();
   const c = game.campaign;
   const order = election.rounds[c.round - 1].candidates;
   const focus = election.candidates[c.focusNr];
+  const focusColor = focus.color;
   const rows = useMemo(() => election.places.map((p) => {
     const off = officialTally(election, c.round, p.id);
     const study = studyTally(c, p.id);
     const opp = oppTally(c, p.id);
     const sim = addTallies(addTallies(off, study), opp);
-    return { p, off, study, sim, w: winnerOf(sim), flipped: sum(study) + sum(opp) > 0 && winnerOf(sim)?.nr !== winnerOf(off)?.nr };
-  }), [election, c]);
+    const shown = mode === 'oficial' ? off : mode === 'estudo' ? addTallies(study, opp) : sim;
+    return { p, off, study, sim, w: winnerOf(shown), flipped: mode === 'simulado' && sum(study) + sum(opp) > 0 && winnerOf(sim)?.nr !== winnerOf(off)?.nr, added: sum(study) + sum(opp) };
+  }), [election, c, mode]);
 
   return (
     <aside className="panel">
@@ -40,10 +51,12 @@ function Country({ election, game }: { election: Election; game: Game }) {
         <h2>Brasil</h2>
       </div>
       <section className="sect">
-        <div className="sect-title"><span className="caps">Resultado nacional</span><span style={{ display: 'flex', gap: 6 }}><Tag kind="official" /><Tag kind="study" /></span></div>
-        <ResultBars election={election} order={order} official={game.official} study={game.study} opp={game.opp} focusNr={c.focusNr} limit={c.round === 1 ? 5 : 2} />
+        <div className="sect-title"><span className="caps">Resultado nacional</span><Tags mode={mode} /></div>
+        <ResultBars election={election} order={order} official={game.official} study={game.study} opp={game.opp} mode={mode} focusNr={c.focusNr} limit={c.round === 1 ? 5 : 2} />
         <p className="small muted">
-          Sólido: apuração oficial do TSE. Hachurado: votos fictícios do seu estudo.
+          {mode === 'simulado' && 'Cor cheia: apuração oficial do TSE. Listrado: votos fictícios que você adicionou. Escolha “Oficial” para ver só os números originais.'}
+          {mode === 'oficial' && 'Apuração oficial do TSE, sem nenhum voto adicionado.'}
+          {mode === 'estudo' && 'Apenas os votos fictícios que você adicionou.'}
           {game.goal.reached
             ? <> <b>{focus.name} superou {election.candidates[game.goal.rivalNr].name}.</b></>
             : <> Faltam <b className="num">{fmtCompact(game.goal.needed)}</b> votos para superar {election.candidates[game.goal.rivalNr].name}.</>}
@@ -52,15 +65,15 @@ function Country({ election, game }: { election: Election; game: Game }) {
       <section className="sect">
         <div className="sect-title"><span className="caps">Estados</span><span className="small faint">clique para detalhar</span></div>
         <table className="uf-table">
-          <thead><tr><th>UF</th><th>Líder</th><th className="r">Margem</th><th className="r">Estudo</th></tr></thead>
+          <thead><tr><th>UF</th><th>Líder</th><th className="r">Margem</th>{mode !== 'oficial' && <th className="r">Seus</th>}</tr></thead>
           <tbody>
-            {rows.map(({ p, w, study, flipped }) => (
+            {rows.map(({ p, w, added, flipped }) => (
               <tr key={p.id} onClick={() => select(p.id)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && select(p.id)}>
                 <td><b>{p.id === 'ZZ' ? 'EXT' : p.id}</b></td>
                 <td><span className="res-name"><span className="dot" style={{ background: w ? election.candidates[w.nr].color : 'var(--rule)' }} />
                   <span className="t">{w ? election.candidates[w.nr].name : '—'}</span>{flipped && <span className="study-text" title="Virado pelos seus votos">●</span>}</span></td>
                 <td className="r">{w ? fmtPct(w.margin) : '—'}</td>
-                <td className="r study-text">{sum(study) ? fmtCompact(sum(study)) : ''}</td>
+                {mode !== 'oficial' && <td className="r added-text" style={{ ['--c' as string]: focusColor }}>{added ? `+${fmtCompact(added)}` : ''}</td>}
               </tr>
             ))}
           </tbody>
@@ -71,7 +84,7 @@ function Country({ election, game }: { election: Election; game: Game }) {
 }
 
 function Place({ election, game, uf, mun }: { election: Election; game: Game; uf: string; mun: string | null }) {
-  const { select } = useUi();
+  const { select, mode } = useUi();
   const c = game.campaign;
   const ri = c.round - 1;
   const order = election.rounds[ri].candidates;
@@ -92,7 +105,7 @@ function Place({ election, game, uf, mun }: { election: Election; game: Game; uf
   const opp = useMemo(() => oppTally(c, placeId), [c, placeId]);
   const sim = addTallies(addTallies(off, study), opp);
   const gap = flipGap(sim, c.focusNr);
-  const w = winnerOf(sim);
+  const w = winnerOf(mode === 'oficial' ? off : mode === 'estudo' ? addTallies(study, opp) : sim);
   const title = row ? row[1] : place.name;
   const mine = (sim[c.focusNr] ?? 0);
 
@@ -101,9 +114,9 @@ function Place({ election, game, uf, mun }: { election: Election; game: Game; uf
     return rows.map((r) => {
       const t: Tally = {}; order.forEach((nr, i) => (t[nr] = (r[ri + 2] as number[])[i]));
       const s = studyTally(c, r[0]);
-      return { id: r[0], name: r[1], total: sum(t), w: winnerOf(addTallies(t, s)), study: sum(s) };
+      return { id: r[0], name: r[1], total: sum(t), w: winnerOf(mode === 'oficial' ? t : mode === 'estudo' ? s : addTallies(t, s)), study: sum(s) };
     }).sort((a, b) => b.total - a.total).slice(0, 12);
-  }, [rows, c, order, ri]);
+  }, [rows, c, order, ri, mode]);
 
   return (
     <aside className="panel">
@@ -120,9 +133,12 @@ function Place({ election, game, uf, mun }: { election: Election; game: Game; uf
       </div>
 
       <section className="sect">
-        <div className="sect-title"><span className="caps">Resultado</span><span style={{ display: 'flex', gap: 6 }}><Tag kind="official" /><Tag kind="study" /></span></div>
-        <ResultBars election={election} order={order} official={off} study={study} opp={opp} focusNr={c.focusNr} limit={c.round === 1 ? 5 : 2} />
-        <p className="small faint">{fmtInt(sum(off))} votos oficiais{sum(study) > 0 && <> + <span className="study-text">{fmtInt(sum(study))} de estudo</span></>}{sum(opp) > 0 && <> + <span className="opp-text">{fmtInt(sum(opp))} da oposição</span></>}</p>
+        <div className="sect-title"><span className="caps">Resultado</span><Tags mode={mode} /></div>
+        <ResultBars election={election} order={order} official={off} study={study} opp={opp} mode={mode} focusNr={c.focusNr} limit={c.round === 1 ? 5 : 2} />
+        <p className="small faint">
+          {mode === 'oficial' ? <>{fmtInt(sum(off))} votos oficiais</> : mode === 'estudo' ? <>{fmtInt(sum(study) + sum(opp))} votos adicionados</>
+            : <>{fmtInt(sum(sim))} votos no total, sendo {fmtInt(sum(off))} oficiais{sum(study) > 0 && <> + <b>{fmtInt(sum(study))}</b> seus</>}{sum(opp) > 0 && <> + <span className="opp-text">{fmtInt(sum(opp))} da oposição</span></>}</>}
+        </p>
       </section>
 
       <section className="sect">
@@ -148,7 +164,7 @@ function Place({ election, game, uf, mun }: { election: Election; game: Game; uf
                   <tr key={m.id} onClick={() => select(uf, m.id)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && select(uf, m.id)}>
                     <td><span className="res-name"><span className="dot" style={{ background: m.w ? election.candidates[m.w.nr].color : 'var(--rule)' }} /><span className="t">{m.name}</span></span></td>
                     <td className="r small muted">{fmtCompact(m.total)}</td>
-                    <td className="r study-text">{m.study ? `+${fmtCompact(m.study)}` : ''}</td>
+                    <td className="r added-text" style={{ ['--c' as string]: election.candidates[c.focusNr].color }}>{m.study && mode !== 'oficial' ? `+${fmtCompact(m.study)}` : ''}</td>
                   </tr>
                 ))}
               </tbody>

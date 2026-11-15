@@ -13,7 +13,7 @@ function paint(t: Tally, mode: MapMode, election: Election, maxStudy: number) {
   const w = winnerOf(t);
   if (!w) return { fill: 'var(--map-empty)', opacity: 1 };
   if (mode === 'estudo') {
-    return { fill: 'var(--study-fill)', opacity: 0.2 + 0.8 * Math.min(1, maxStudy ? sum(t) / maxStudy : 0) };
+    return { fill: election.candidates[w.nr].color, opacity: 0.25 + 0.75 * Math.min(1, maxStudy ? sum(t) / maxStudy : 0) };
   }
   return { fill: election.candidates[w.nr].color, opacity: 0.42 + Math.min(0.58, w.margin * 2.4) };
 }
@@ -51,8 +51,8 @@ export function BrazilMap({ election, game }: Props) {
 
   const proj = useMemo(() => {
     if (!ufGeo) return null;
-    const pad = 28;
-    const p = geoMercator().fitExtent([[pad, pad + 38], [Math.max(size.w - pad, pad + 10), Math.max(size.h - pad - 30, pad + 40)]], ufGeo);
+    const pad = size.w < 520 ? 8 : 28;
+    const p = geoMercator().fitExtent([[pad, pad + 44], [Math.max(size.w - pad, pad + 10), Math.max(size.h - pad - 24, pad + 40)]], ufGeo);
     return { p, path: geoPath(p) };
   }, [ufGeo, size]);
 
@@ -120,26 +120,26 @@ export function BrazilMap({ election, game }: Props) {
         <svg className="map-svg" viewBox={`0 0 ${size.w} ${size.h}`} role="img" aria-label="Mapa do Brasil por estado"
           onClick={(e) => e.target === e.currentTarget && select(null)}>
           <g style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.k})`, transformOrigin: '0 0', transition: 'transform 0.55s cubic-bezier(.3,.7,.2,1)' }}>
-            {ufPaths.map((u) => {
+            {ufPaths.map((u, i) => {
               const t = ufTally[u.id];
               const pa = paint(mode === 'oficial' ? t.off : mode === 'estudo' ? t.study : t.sim, mode, election, maxStudy);
               const isSel = selUf === u.id;
               const hide = isSel && munPaths.length > 0;
               return (
                 <path key={u.id} d={u.d} fill={pa.fill} fillOpacity={hide ? 0 : pa.opacity}
-                  className={`uf${isSel ? ' sel' : ''}${selUf && !isSel ? ' dim' : ''}${mode === 'simulado' && flipped(u.id) ? ' flipped' : ''}`}
+                  style={{ animationDelay: `${i * 14}ms` }} className={`uf reveal${isSel ? ' sel' : ''}${selUf && !isSel ? ' dim' : ''}${mode === 'simulado' && flipped(u.id) ? ' flipped' : ''}`}
                   onClick={() => select(isSel ? null : u.id)}
                   onMouseMove={(e) => move(e, [u.name, describe(mode === 'oficial' ? t.off : mode === 'estudo' ? t.study : t.sim)])}
                   onMouseLeave={() => setTip(null)} />
               );
             })}
-            {munPaths.map((m) => {
+            {munPaths.map((m, i) => {
               const t = munTally[m.id];
               if (!t) return <path key={m.id} d={m.d} fill="var(--map-empty)" className="mun" />;
               const pa = paint(mode === 'oficial' ? t.off : mode === 'estudo' ? t.study : t.sim, mode, election, maxMunStudy);
               return (
                 <path key={m.id} d={m.d} fill={pa.fill} fillOpacity={pa.opacity}
-                  className={`mun${mun === m.id ? ' sel' : ''}`}
+                  style={{ animationDelay: `${Math.min(i, 120) * 4}ms` }} className={`mun reveal${mun === m.id ? ' sel' : ''}`}
                   onClick={() => select(selUf, mun === m.id ? null : m.id)}
                   onMouseMove={(e) => move(e, [t.name, describe(mode === 'oficial' ? t.off : mode === 'estudo' ? t.study : t.sim)])}
                   onMouseLeave={() => setTip(null)} />
@@ -187,7 +187,7 @@ function Legend({ election, game }: Props) {
   return (
     <div className="map-legend">
       {mode === 'estudo' ? (
-        <div className="legend-row"><span><i className="dot" style={{ background: 'var(--study-fill)' }} />Mais escuro = mais votos de estudo</span></div>
+        <div className="legend-row"><span>Cor = candidato que mais recebeu seus votos · intensidade = quantidade</span></div>
       ) : (
         <>
           <div className="legend-row">

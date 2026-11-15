@@ -1,7 +1,9 @@
 import type { ReactElement } from 'react';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import { Count } from './ui/motion';
 import { useEffect, useState } from 'react';
 import type { Election } from './core/types';
-import { applyStrategy, dayKey, elapsedSeconds, fmtClock, fmtInt, isRunning, secondsByDay, settleLosses, splitInt, sum, officialTally } from './core';
+import { applyStrategy, dayKey, elapsedSeconds, fmtClock, isRunning, secondsByDay, settleLosses, splitInt, sum, officialTally } from './core';
 import { loadElection } from './data/loader';
 import { useStore, useUi, type Tab } from './state/store';
 import { useGame } from './state/useGame';
@@ -34,7 +36,7 @@ export default function App() {
     </div>
   );
   if (!election) return <div className="loading">Carregando eleição…</div>;
-  return <Shell election={election} />;
+  return <MotionConfig reducedMotion="user"><Shell election={election} /></MotionConfig>;
 }
 
 function Shell({ election }: { election: Election }) {
@@ -109,12 +111,17 @@ function Shell({ election }: { election: Election }) {
             <span className="bt">Estude <i>&amp;</i> Ganhe</span>
           </span>
           <nav className="nav" aria-label="Seções">
-            {TABS.map(([t, l]) => <button key={t} aria-current={tab === t ? 'page' : undefined} onClick={() => setTab(t)}>{l}</button>)}
+            {TABS.map(([t, l]) => (
+              <button key={t} aria-current={tab === t ? 'page' : undefined} onClick={() => setTab(t)}>
+                {tab === t && <motion.i layoutId="navpill" className="navpill" transition={{ type: 'spring', stiffness: 500, damping: 36 }} />}
+                <span>{l}</span>
+              </button>
+            ))}
           </nav>
           <div className="header-right">
             {game && (
               <>
-                <span className="small muted hide-m">Saldo <b className="num study-text">{fmtInt(Math.max(0, game.wallet))}</b></span>
+                <span className="small muted hide-m">Saldo <b className="num study-text"><Count value={Math.max(0, game.wallet)} /></b></span>
                 <button className="chip" onClick={() => openCampaign('replanejar')} title="Replanejar campanha">
                   <span className="dot" style={{ background: election.candidates[game.campaign.focusNr].color }} />
                   {election.candidates[game.campaign.focusNr].name} · {game.campaign.round}º turno
@@ -126,17 +133,19 @@ function Shell({ election }: { election: Election }) {
       </header>
 
       <main className="main">
-        {game && tab === 'inicio' && <HomePage election={election} />}
-        {tab === 'ajustes' && <SettingsPage election={election} />}
-        {game && tab === 'estudar' && <StudyPage election={election} />}
-        {game && tab === 'mapa' && <MapPage election={election} game={game} />}
-        {tab === 'progresso' && <ProgressPage election={election} />}
-        {!game && <div className="loading">Crie sua primeira campanha para começar</div>}
+        <motion.div key={tab} className="view" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}>
+          {game && tab === 'inicio' && <HomePage election={election} />}
+          {tab === 'ajustes' && <SettingsPage election={election} />}
+          {game && tab === 'estudar' && <StudyPage election={election} />}
+          {game && tab === 'mapa' && <MapPage election={election} game={game} />}
+          {tab === 'progresso' && <ProgressPage election={election} />}
+          {!game && <div className="loading">Crie sua primeira campanha para começar</div>}
+        </motion.div>
       </main>
 
       <Dock election={election} />
       <nav className="tabbar" aria-label="Seções">
-        {TABS.map(([t, l, Icon]) => <button key={t} aria-current={tab === t ? 'page' : undefined} onClick={() => setTab(t)}><Icon /><span>{l}</span></button>)}
+        {TABS.map(([t, l, Icon]) => <button key={t} aria-current={tab === t ? 'page' : undefined} onClick={() => setTab(t)}>{tab === t && <motion.i layoutId="tabmark" className="tabmark" transition={{ type: 'spring', stiffness: 500, damping: 36 }} />}<Icon /><span>{l}</span></button>)}
       </nav>
 
       {(campaignModal === 'novo' || campaignModal === 'avancar' || (campaignModal === 'replanejar' && game)) && (
@@ -156,14 +165,18 @@ function Dock({ election }: { election: Election }) {
   const { tab, setTab, setSummary } = useUi();
   const running = !!active && isRunning(active);
   const now = useNow(running);
-  if (!active || tab === 'estudar') return null;
+  const show = !!active && tab !== 'estudar';
   return (
-    <div className="dock">
+    <AnimatePresence>
+      {show && active && (
+    <motion.div className="dock" initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 34 }}>
       <span className="t num">{fmtClock(elapsedSeconds(active, now))}</span>
       <span className="grow small muted">{running ? 'Estudando' : 'Em pausa'}{active.label ? ` · ${active.label}` : ''} · {election.year}</span>
       {running ? <button className="btn ghost small" onClick={pause}>Pausar</button> : <button className="btn small" onClick={resume}>Retomar</button>}
       <button className="btn study small" onClick={() => { const s = finish(); if (s) setSummary(s); }}>Finalizar</button>
       <button className="link small hide-m" onClick={() => setTab('estudar')}>Abrir</button>
-    </div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
