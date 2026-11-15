@@ -2,13 +2,14 @@ import { useRef, useState } from 'react';
 import type { Election } from '../../core/types';
 import { STRATEGY_INFO, fmtDuration, fmtInt } from '../../core';
 import { useStore, useUi, type Theme } from '../../state/store';
+import { isNative, requestNotificationPermission } from '../../platform/native';
 import { selectCampaign } from '../../state/store';
 
 const THEMES: [Theme, string][] = [['auto', 'Automático'], ['claro', 'Claro'], ['escuro', 'Escuro']];
 
 export function SettingsPage({ election }: { election: Election }) {
   const st = useStore();
-  const { dailyGoalMin, setDailyGoal, theme, setTheme, patchCampaign, importAll, resetAll } = st;
+  const { dailyGoalMin, setDailyGoal, theme, setTheme, patchCampaign, importAll, resetAll, pomodoro, setPomodoro, reminders, setReminders, prefs, setPrefs } = st;
   const c = selectCampaign(st);
   const { openCampaign } = useUi();
   const file = useRef<HTMLInputElement>(null);
@@ -52,6 +53,48 @@ export function SettingsPage({ election }: { election: Election }) {
           <div className="row-top"><div><b>Meta diária</b><span className="small muted">Base da sequência de dias e das campanhas novas.</span></div><b className="num">{fmtDuration(dailyGoalMin * 60)}</b></div>
           <input type="range" min={15} max={360} step={5} value={dailyGoalMin} onChange={(e) => setDailyGoal(+e.target.value)} aria-label="Meta diária em minutos" />
         </div>
+      </section>
+
+      <section className="card setting-group">
+        <h3>Pomodoro</h3>
+        <div className="row">
+          <div><b>Usar Pomodoro nas sessões</b><span className="small muted">Alterna blocos de foco e pausas. O tempo de pausa não vira votos.</span></div>
+          <label className="switch"><input type="checkbox" checked={pomodoro.on} onChange={(e) => setPomodoro({ on: e.target.checked })} /><i /></label>
+        </div>
+        {([['focusMin', 'Foco', 10, 60, 5], ['breakMin', 'Pausa curta', 3, 15, 1], ['longBreakMin', 'Pausa longa', 10, 30, 5], ['cycles', 'Blocos até a pausa longa', 2, 6, 1]] as const).map(([k, label, min, max, step]) => (
+          <div className="row col" key={k}>
+            <div className="row-top"><div><b>{label}</b></div><b className="num">{pomodoro[k]}{k === 'cycles' ? '' : ' min'}</b></div>
+            <input type="range" min={min} max={max} step={step} value={pomodoro[k]} onChange={(e) => setPomodoro({ [k]: +e.target.value })} aria-label={label} />
+          </div>
+        ))}
+        <div className="row">
+          <div><b>Som e vibração</b><span className="small muted">Avisa a troca entre foco e pausa.</span></div>
+          <label className="switch"><input type="checkbox" checked={prefs.sound} onChange={(e) => setPrefs({ sound: e.target.checked })} /><i /></label>
+        </div>
+        <div className="row">
+          <div><b>Manter a tela ligada</b><span className="small muted">Durante uma sessão, para o celular não apagar.</span></div>
+          <label className="switch"><input type="checkbox" checked={prefs.keepAwake} onChange={(e) => setPrefs({ keepAwake: e.target.checked })} /><i /></label>
+        </div>
+      </section>
+
+      <section className="card setting-group">
+        <h3>Lembretes</h3>
+        {!isNative && <p className="small muted">Os lembretes funcionam no app Android. No navegador eles ficam desativados.</p>}
+        <div className="row">
+          <div><b>Lembrete diário</b><span className="small muted">Aviso na hora de estudar, até a meta ser cumprida.</span></div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <input type="time" className="in time" value={reminders.time} disabled={!isNative} onChange={(e) => e.target.value && setReminders({ time: e.target.value })} aria-label="Horário do lembrete diário" />
+            <label className="switch"><input type="checkbox" checked={reminders.daily} disabled={!isNative} onChange={async (e) => { if (e.target.checked && !(await requestNotificationPermission())) return setMsg('Permita as notificações do app nas configurações do Android.'); setReminders({ daily: e.target.checked }); }} /><i /></label>
+          </div>
+        </div>
+        <div className="row">
+          <div><b>Aviso de meta em risco</b><span className="small muted">Quanto falta hoje e quantos votos o adversário ganha se você parar.</span></div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <input type="time" className="in time" value={reminders.riskTime} disabled={!isNative} onChange={(e) => e.target.value && setReminders({ riskTime: e.target.value })} aria-label="Horário do aviso de meta em risco" />
+            <label className="switch"><input type="checkbox" checked={reminders.risk} disabled={!isNative} onChange={async (e) => { if (e.target.checked && !(await requestNotificationPermission())) return setMsg('Permita as notificações do app nas configurações do Android.'); setReminders({ risk: e.target.checked }); }} /><i /></label>
+          </div>
+        </div>
+        {msg && <p className="small banner">{msg}</p>}
       </section>
 
       {c && (

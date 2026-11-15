@@ -397,3 +397,10 @@ input[type='range'] { width: 100%; accent-color: var(--ink); }
 .badge.locked b, .badge.locked span { color: var(--ink-3); }
 .boost-chip { display: inline-flex; gap: 8px; align-items: center; padding: 6px 12px; border-radius: 99px; font-size: 13px; font-weight: 550; background: var(--study-soft); color: var(--study); }
 .boost-chip.ruim { background: color-mix(in srgb, var(--danger) 14%, var(--surface)); color: var(--danger); }
+
+.clock.rest { color: var(--ink-3); }
+.pomo-toggle { display: flex; align-items: center; gap: 12px; }
+.pdot { width: 9px; height: 9px; border-radius: 50%; background: var(--rule-strong); transition: background 0.2s; }
+.pdot.on { background: var(--study-fill); }
+.in.time { width: auto; padding: 6px 10px; font-variant-numeric: tabular-nums; }
+.in.time:disabled { opacity: 0.5; }

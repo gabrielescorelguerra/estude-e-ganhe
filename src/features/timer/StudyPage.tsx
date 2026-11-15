@@ -1,22 +1,26 @@
 import { useState } from 'react';
 import type { Election } from '../../core/types';
-import { elapsedSeconds, fmtClock, fmtCompact, fmtDuration, fmtInt, isRunning, votesFor } from '../../core';
+import { elapsedSeconds, fmtClock, pomoView, fmtCompact, fmtDuration, fmtInt, isRunning, votesFor } from '../../core';
 import { diffDays, dayKey, effectiveRate, minutesToGoal, penaltyVotes, STRATEGY_INFO, secondsByDay, streak } from '../../core';
 import { useStore, useUi } from '../../state/store';
 import { useGame } from '../../state/useGame';
 import { useNow } from './useNow';
 import { Count } from '../../ui/motion';
 import { Avatar } from '../../ui/bits';
+import { unlockAudio } from '../../ui/sound';
 
 export function StudyPage({ election }: { election: Election }) {
   const game = useGame(election);
-  const { active, start, pause, resume, finish, discard, setLabel, labels, sessions, dailyGoalMin } = useStore();
+  const { active, start, pause, resume, finish, discard, setLabel, labels, sessions, dailyGoalMin, pomodoro, setPomodoro, skipBreak } = useStore();
   const { openCampaign, setSummary, setTab } = useUi();
   const running = !!active && isRunning(active);
-  const now = useNow(running);
+  const now = useNow(!!active);
   const [draft, setDraft] = useState('');
 
   const secs = active ? elapsedSeconds(active, now) : 0;
+  const view = active ? pomoView(active, pomodoro, now) : null;
+  const inBreak = !!view && view.phase !== 'foco';
+  const begin = () => { unlockAudio(); start(draft); };
   const liveVotes = active ? votesFor(secs, active.rate) : 0;
 
   const today = dayKey(now);
@@ -39,9 +43,12 @@ export function StudyPage({ election }: { election: Election }) {
     <div className="study-page">
       <section className="clock-wrap" aria-label="Cronômetro">
         <p className="caps" style={{ minHeight: 16 }}>
-          {active ? (running ? 'Estudando' : 'Em pausa') : 'Nova sessão'}
+          {view
+            ? view.phase === 'foco' ? `Foco · bloco ${view.blockInCycle} de ${pomodoro.cycles}${running ? '' : ' · pausado'}` : view.phase === 'pausa' ? 'Pausa curta' : 'Pausa longa'
+            : active ? (running ? 'Estudando' : 'Em pausa') : 'Nova sessão'}
         </p>
-        <div className={`clock num${active ? '' : ' idle'}`} role="timer" aria-live="off">{fmtClock(secs)}</div>
+        <div className={`clock num${active ? '' : ' idle'}${inBreak ? ' rest' : ''}`} role="timer" aria-live="off">{fmtClock(view ? view.remainingSec : secs)}</div>
+        {view && <p className="small muted">Estudado na sessão: <b className="num">{fmtClock(secs)}</b>{view.blocks > 0 && <> · {view.blocks} {view.blocks === 1 ? 'bloco concluído' : 'blocos concluídos'}</>}</p>}
 
         {active ? (
           <input className="label-input" value={active.label} onChange={(e) => setLabel(e.target.value)}
@@ -50,7 +57,7 @@ export function StudyPage({ election }: { election: Election }) {
           <>
             <input className="label-input" value={draft} onChange={(e) => setDraft(e.target.value)}
               placeholder="O que você vai estudar? (opcional)" aria-label="Matéria"
-              onKeyDown={(e) => e.key === 'Enter' && start(draft)} />
+              onKeyDown={(e) => e.key === 'Enter' && begin()} />
             {labels.length > 0 && (
               <div className="label-chips">
                 {labels.slice(0, 5).map((l) => <button key={l} onClick={() => setDraft(l)}>{l}</button>)}
@@ -59,10 +66,19 @@ export function StudyPage({ election }: { election: Election }) {
           </>
         )}
 
+        {!active && (
+          <div className="pomo-toggle">
+            <button className="chip" aria-pressed={pomodoro.on} onClick={() => setPomodoro({ on: !pomodoro.on })}>
+              <span className={`pdot${pomodoro.on ? ' on' : ''}`} aria-hidden /> Pomodoro {pomodoro.on ? `${pomodoro.focusMin}/${pomodoro.breakMin} min` : 'desligado'}
+            </button>
+            <button className="link small" onClick={() => setTab('ajustes')}>ajustar</button>
+          </div>
+        )}
         <div className="controls">
-          {!active && <button className="btn" onClick={() => start(draft)}>Iniciar</button>}
-          {active && running && <button className="btn ghost" onClick={pause}>Pausar</button>}
-          {active && !running && <button className="btn" onClick={resume}>Retomar</button>}
+          {!active && <button className="btn" onClick={begin}>Iniciar</button>}
+          {active && inBreak && <button className="btn ghost" onClick={skipBreak}>Pular pausa</button>}
+          {active && !inBreak && running && <button className="btn ghost" onClick={pause}>Pausar</button>}
+          {active && !inBreak && !running && <button className="btn" onClick={resume}>Retomar</button>}
           {active && <button className="btn study" onClick={onFinish}>Finalizar</button>}
         </div>
         {active && (

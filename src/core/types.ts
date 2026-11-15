@@ -131,6 +131,8 @@ export interface Session {
   seconds: number;
   rate: number;
   votes: number;
+  /** blocos de foco concluídos (modo Pomodoro) */
+  blocks?: number;
 }
 
 export interface Segment {
@@ -138,8 +140,19 @@ export interface Segment {
   end?: number;
 }
 
+export interface PomoState {
+  phase: 'foco' | 'pausa';
+  /** blocos de foco concluídos */
+  blocks: number;
+  /** índice do trecho em que o bloco de foco atual começou */
+  blockSeg: number;
+  breakStart?: number;
+  long?: boolean;
+}
+
 export interface ActiveSession {
   id: string;
+  pomo?: PomoState;
   label: string;
   campaignId: string | null;
   rate: number;

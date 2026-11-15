@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ActiveSession, Campaign, FeedItem, Loss, Session, StrategyConfig } from '../core/types';
 import { effectiveRate } from '../core/events';
+import { DEFAULT_POMODORO, advance, newPomo, skipBreak as skipBreakCore, type PhaseEvent, type PomodoroConfig } from '../core/pomodoro';
 import { addDays, dayKey } from '../core/plan';
 import { elapsedSeconds, isRunning, pauseSegments, resumeSegments, votesFor } from '../core/timer';
 import { allocKey, allocatedTotal } from '../core/tally';
@@ -18,7 +19,15 @@ export interface PersistedState {
   labels: string[];
   theme: Theme;
   badges: Record<string, number>;
+  pomodoro: PomodoroConfig;
+  reminders: RemindersConfig;
+  prefs: Prefs;
 }
+
+export interface RemindersConfig { daily: boolean; time: string; risk: boolean; riskTime: string }
+export interface Prefs { keepAwake: boolean; sound: boolean }
+export const DEFAULT_REMINDERS: RemindersConfig = { daily: false, time: '19:00', risk: false, riskTime: '21:00' };
+export const DEFAULT_PREFS: Prefs = { keepAwake: true, sound: true };
 
 export type Theme = 'auto' | 'claro' | 'escuro';
 
@@ -38,6 +47,12 @@ interface Actions {
   addCampaign: (c: Omit<Campaign, 'id' | 'createdAt' | 'allocations' | 'status' | 'strategy' | 'opposition' | 'settledThrough' | 'lastFreeDay' | 'losses' | 'bonus' | 'snapshot' | 'boost' | 'lastEventDay' | 'feed'> & Partial<Pick<Campaign, 'strategy'>>) => string;
   applySettlement: (campaignId: string, p: Settlement) => void;
   unlockBadges: (ids: string[]) => void;
+  setPomodoro: (p: Partial<PomodoroConfig>) => void;
+  setReminders: (p: Partial<RemindersConfig>) => void;
+  setPrefs: (p: Partial<Prefs>) => void;
+  /** aplica trocas de fase do Pomodoro; devolve o que aconteceu */
+  tick: (now: number) => PhaseEvent[];
+  skipBreak: () => void;
   selectCampaign: (id: string) => void;
   patchCampaign: (id: string, patch: Partial<Campaign>) => void;
   deleteCampaign: (id: string) => void;
@@ -73,29 +88,53 @@ export const useStore = create<Store>()(
       labels: [],
       theme: 'auto',
       badges: {},
+      pomodoro: DEFAULT_POMODORO,
+      reminders: DEFAULT_REMINDERS,
+      prefs: DEFAULT_PREFS,
 
       start: (label) => {
         if (get().active) return;
         const c = get().campaigns.find((x) => x.id === get().activeCampaignId) ?? null;
         const now = Date.now();
         set({
-          active: { id: uid(), label: label.trim(), campaignId: c?.id ?? null, rate: c ? effectiveRate(c, dayKey(now)) : 0, segments: [{ start: now }] },
+          active: { id: uid(), label: label.trim(), campaignId: c?.id ?? null, rate: c ? effectiveRate(c, dayKey(now)) : 0, segments: [{ start: now }], ...(get().pomodoro.on ? { pomo: newPomo() } : {}) },
         });
       },
       pause: () => {
-        const a = get().active;
-        if (a && isRunning(a)) set({ active: { ...a, segments: pauseSegments(a.segments, Date.now()) } });
+        const now = Date.now();
+        const a0 = get().active;
+        const a = a0 && advance(a0, get().pomodoro, now).session;
+        if (a && isRunning(a)) set({ active: { ...a, segments: pauseSegments(a.segments, now) } });
       },
       resume: () => {
-        const a = get().active;
-        if (a && !isRunning(a)) set({ active: { ...a, segments: resumeSegments(a.segments, Date.now()) } });
+        const now = Date.now();
+        const a0 = get().active;
+        const a = a0 && advance(a0, get().pomodoro, now).session;
+        // durante a pausa do Pomodoro "retomar" significa voltar ao foco
+        if (a?.pomo?.phase === 'pausa') return set({ active: skipBreakCore(a, now) });
+        if (a && !isRunning(a)) set({ active: { ...a, segments: resumeSegments(a.segments, now) } });
       },
+      tick: (now) => {
+        const a = get().active;
+        if (!a?.pomo) return [];
+        const r = advance(a, get().pomodoro, now);
+        if (r.events.length) set({ active: r.session });
+        return r.events;
+      },
+      skipBreak: () => {
+        const a = get().active;
+        if (a) set({ active: skipBreakCore(a, Date.now()) });
+      },
+      setPomodoro: (p) => set({ pomodoro: { ...get().pomodoro, ...p } }),
+      setReminders: (p) => set({ reminders: { ...get().reminders, ...p } }),
+      setPrefs: (p) => set({ prefs: { ...get().prefs, ...p } }),
       setLabel: (label) => {
         const a = get().active;
         if (a) set({ active: { ...a, label } });
       },
       finish: () => {
-        const a = get().active;
+        const a0 = get().active;
+        const a = a0 && advance(a0, get().pomodoro, Date.now()).session;
         if (!a) return null;
         const now = Date.now();
         const seconds = elapsedSeconds(a, now);
@@ -103,6 +142,7 @@ export const useStore = create<Store>()(
         const session: Session = {
           id: a.id, campaignId: a.campaignId, label: a.label, start: first, end: now,
           seconds, rate: a.rate, votes: votesFor(seconds, a.rate),
+          ...(a.pomo ? { blocks: a.pomo.blocks } : {}),
         };
         const labels = a.label ? [a.label, ...get().labels.filter((l) => l !== a.label)].slice(0, 8) : get().labels;
         // sessões muito curtas (< 5 s) são descartadas: provavelmente toque acidental
@@ -196,7 +236,7 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'estude-e-ganhe/v1',
-      version: 3,
+      version: 4,
       migrate: (persisted) => {
         const st = persisted as PersistedState;
         const today = dayKey(Date.now());
@@ -209,12 +249,16 @@ export const useStore = create<Store>()(
           status: (c.status as string) === 'expirada' ? 'derrota' : c.status,
         }));
         st.badges = st.badges ?? {};
+        st.pomodoro = { ...DEFAULT_POMODORO, ...(st.pomodoro ?? {}) };
+        st.reminders = { ...DEFAULT_REMINDERS, ...(st.reminders ?? {}) };
+        st.prefs = { ...DEFAULT_PREFS, ...(st.prefs ?? {}) };
         return st;
       },
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         sessions: s.sessions, active: s.active, campaigns: s.campaigns,
         activeCampaignId: s.activeCampaignId, dailyGoalMin: s.dailyGoalMin, labels: s.labels, theme: s.theme, badges: s.badges,
+        pomodoro: s.pomodoro, reminders: s.reminders, prefs: s.prefs,
       }),
     },
   ),

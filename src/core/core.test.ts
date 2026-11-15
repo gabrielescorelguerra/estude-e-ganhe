@@ -163,3 +163,39 @@ describe('conquistas', () => {
     expect(got).toEqual(['primeira', 'cinco', 'dez-horas', 'semana']);
   });
 });
+
+import { advance, skipBreak, newPomo, pomoView, phaseEndAt, DEFAULT_POMODORO } from './pomodoro';
+import type { ActiveSession } from './types';
+describe('pomodoro', () => {
+  const cfg = { ...DEFAULT_POMODORO, on: true, focusMin: 25, breakMin: 5, longBreakMin: 15, cycles: 4 };
+  const t0 = 1_000_000_000_000;
+  const MIN = 60000;
+  const mk = (): ActiveSession => ({ id: 'a', label: '', campaignId: null, rate: 1000, segments: [{ start: t0 }], pomo: newPomo() });
+  it('troca para a pausa no instante exato do fim do bloco, mesmo que o app tenha ficado em segundo plano', () => {
+    const r = advance(mk(), cfg, t0 + 40 * MIN); // 25 foco + 5 pausa + 10 foco
+    expect(r.events.map((e) => e.to)).toEqual(['pausa', 'foco']);
+    expect(r.events[0].at).toBe(t0 + 25 * MIN);
+    expect(r.events[1].at).toBe(t0 + 30 * MIN);
+    // estudado: 25 + 10 min; a pausa não conta
+    expect(elapsedSeconds(r.session, t0 + 40 * MIN)).toBe(35 * 60);
+    expect(r.session.pomo).toMatchObject({ phase: 'foco', blocks: 1 });
+  });
+  it('a 4ª pausa é longa', () => {
+    let s = mk();
+    let now = t0;
+    for (let i = 0; i < 4; i++) { now += 25 * MIN; s = advance(s, cfg, now).session; if (i < 3) { now += 5 * MIN; s = advance(s, cfg, now).session; } }
+    expect(s.pomo).toMatchObject({ phase: 'pausa', blocks: 4, long: true });
+    expect(pomoView(s, cfg, now + 60000)?.remainingSec).toBe(14 * 60);
+  });
+  it('pausar manualmente congela o bloco; pular a pausa volta ao foco', () => {
+    let s = mk();
+    s = { ...s, segments: [{ start: t0, end: t0 + 10 * MIN }] };
+    expect(advance(s, cfg, t0 + 90 * MIN).events).toEqual([]);
+    expect(phaseEndAt(s, cfg, t0 + 20 * MIN)).toBeNull();
+    const br = advance(mk(), cfg, t0 + 26 * MIN).session;
+    expect(br.pomo?.phase).toBe('pausa');
+    const back = skipBreak(br, t0 + 27 * MIN);
+    expect(back.pomo?.phase).toBe('foco');
+    expect(elapsedSeconds(back, t0 + 29 * MIN)).toBe(27 * 60);
+  });
+});

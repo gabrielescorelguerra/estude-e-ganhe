@@ -5,7 +5,10 @@ import { useEffect, useState } from 'react';
 import type { Election } from './core/types';
 import { applyStrategy, dayKey, elapsedSeconds, fmtClock, isRunning, secondsByDay, streak, winnerOf, addTallies, officialTally, studyTally, oppTally, BADGES, type BadgeStats } from './core';
 import { runSettlement } from './state/settle';
+import { pomoView } from './core';
 import { Toasts } from './ui/Toasts';
+import { chime } from './ui/sound';
+import { onServiceButton, setKeepAwake, syncPhaseAlarm, syncReminders, syncSessionService } from './platform/native';
 import { DEFAULT_ELECTION, loadElection } from './data/loader';
 import { selectCampaign, useStore, useUi, type Tab } from './state/store';
 import { useGame } from './state/useGame';
@@ -72,6 +75,76 @@ function Shell({ election }: { election: Election }) {
     if (placements.length) place(c.id, placements);
     if (next !== strat) setStrategy(c.id, next);
   }, [wallet, strat, game, election, place, setStrategy]);
+
+  // ---- Pomodoro, segundo plano, lembretes ----
+  const active = useStore((s) => s.active);
+  const pomodoro = useStore((s) => s.pomodoro);
+  const reminders = useStore((s) => s.reminders);
+  const prefs = useStore((s) => s.prefs);
+  const setSummary = useUi((u) => u.setSummary);
+  const focusName = election.candidates[game?.campaign.focusNr ?? -1]?.name ?? '';
+  const rivalName = election.candidates[game?.goal.rivalNr ?? -1]?.name ?? '';
+
+  // troca de fase: confere a cada segundo e ao voltar para o app
+  const hasPomo = !!active?.pomo;
+  useEffect(() => {
+    if (!hasPomo) return;
+    const run = () => {
+      for (const ev of useStore.getState().tick(Date.now())) {
+        const toBreak = ev.to !== 'foco';
+        if (Date.now() - ev.at < 20000) {
+          if (prefs.sound) chime(toBreak ? 'pausa' : 'foco');
+          if (prefs.sound) navigator.vibrate?.(toBreak ? [120, 80, 120] : 200);
+          toast({ title: toBreak ? (ev.to === 'pausa-longa' ? 'Pausa longa' : 'Hora da pausa') : 'De volta ao foco', text: toBreak ? 'Bloco concluído. Respire um pouco.' : 'Pausa terminou. Próximo bloco.', tone: toBreak ? 'bom' : 'neutro' });
+        }
+      }
+    };
+    run();
+    const id = setInterval(run, 1000);
+    document.addEventListener('visibilitychange', run);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', run); };
+  }, [hasPomo, prefs.sound, toast]);
+
+  // notificação fixa + alarme do fim da fase
+  const phaseKey = active ? `${active.id}|${active.label}|${active.pomo?.phase}|${active.pomo?.blocks}|${active.segments.length}|${active.segments[active.segments.length - 1]?.end ?? 'run'}` : 'none';
+  useEffect(() => {
+    void syncSessionService(active, pomodoro, { focusName, rate: active?.rate ?? 0 });
+    void syncPhaseAlarm(active, pomodoro);
+  }, [phaseKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // botões da notificação (pausar/retomar/pular, finalizar)
+  useEffect(() => {
+    let off = () => {};
+    void onServiceButton((id) => {
+      const st = useStore.getState();
+      if (id === 2) { const s = st.finish(); if (s) setSummary(s); return; }
+      const a = st.active;
+      if (!a) return;
+      if (a.pomo?.phase === 'pausa') st.skipBreak();
+      else if (a.segments[a.segments.length - 1].end === undefined) st.pause();
+      else st.resume();
+    }).then((o) => { off = o; });
+    return () => off();
+  }, [setSummary]);
+
+  // tela ligada enquanto estuda
+  useEffect(() => {
+    const want = !!active && prefs.keepAwake;
+    const apply = () => void setKeepAwake(want && document.visibilityState === 'visible');
+    apply();
+    document.addEventListener('visibilitychange', apply);
+    return () => { document.removeEventListener('visibilitychange', apply); void setKeepAwake(false); };
+  }, [active, prefs.keepAwake]);
+
+  // lembretes
+  const studiedToday = secondsByDay(sessions.filter((s) => s.campaignId === game?.campaign.id)).get(today) ?? 0;
+  useEffect(() => {
+    if (!game || game.campaign.status !== 'ativa') { void syncReminders({ cfg: { ...reminders, daily: false, risk: false }, now: Date.now(), today, goalMin: 0, studiedTodaySec: 0, focusName, rivalName, penalty: false, rate: 0 }); return; }
+    void syncReminders({
+      cfg: reminders, now: Date.now(), today, goalMin: game.campaign.dailyGoalMin, studiedTodaySec: studiedToday,
+      focusName, rivalName, penalty: game.campaign.penalty, rate: game.campaign.rate,
+    });
+  }, [reminders, today, Math.floor(studiedToday / 60), game?.campaign.id, game?.campaign.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // fechamento dos dias: metas não cumpridas, contra-ataque e eventos
   const camp = game?.campaign;
@@ -195,15 +268,17 @@ function Dock({ election }: { election: Election }) {
   const { active, pause, resume, finish } = useStore();
   const { tab, setTab, setSummary } = useUi();
   const running = !!active && isRunning(active);
-  const now = useNow(running);
+  const pomodoro = useStore((s) => s.pomodoro);
+  const now = useNow(!!active);
+  const dv = active ? pomoView(active, pomodoro, now) : null;
   const show = !!active && tab !== 'estudar';
   return (
     <AnimatePresence>
       {show && active && (
     <motion.div className="dock" initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 34 }}>
-      <span className="t num">{fmtClock(elapsedSeconds(active, now))}</span>
-      <span className="grow small muted">{running ? 'Estudando' : 'Em pausa'}{active.label ? ` · ${active.label}` : ''} · {election.year}</span>
-      {running ? <button className="btn ghost small" onClick={pause}>Pausar</button> : <button className="btn small" onClick={resume}>Retomar</button>}
+      <span className="t num">{fmtClock(dv ? dv.remainingSec : elapsedSeconds(active, now))}</span>
+      <span className="grow small muted">{dv ? (dv.phase === 'foco' ? `Foco ${dv.blockInCycle}/${pomodoro.cycles}` : 'Pausa') : running ? 'Estudando' : 'Em pausa'}{active.label ? ` · ${active.label}` : ''} · {election.year}</span>
+      {dv && dv.phase !== 'foco' ? <button className="btn ghost small" onClick={useStore.getState().skipBreak}>Pular pausa</button> : running ? <button className="btn ghost small" onClick={pause}>Pausar</button> : <button className="btn small" onClick={resume}>Retomar</button>}
       <button className="btn study small" onClick={() => { const s = finish(); if (s) setSummary(s); }}>Finalizar</button>
       <button className="link small hide-m" onClick={() => setTab('estudar')}>Abrir</button>
     </motion.div>
