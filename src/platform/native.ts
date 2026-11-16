@@ -41,10 +41,10 @@ export async function requestNotificationPermission(): Promise<boolean> {
 const SERVICE_ID = 1;
 let serviceOn = false;
 
-export async function syncSessionService(a: ActiveSession | null, cfg: PomodoroConfig, ctx: { focusName: string; rate: number }, now = Date.now()) {
+export async function syncSessionService(a: ActiveSession | null, cfg: PomodoroConfig, ctx: { focusName: string; rate: number; enabled?: boolean }, now = Date.now()) {
   if (!isNative) return;
   const { ForegroundService } = await fg();
-  if (!a) {
+  if (!a || ctx.enabled === false) {
     if (serviceOn) { serviceOn = false; await safe(() => ForegroundService.stopForegroundService()); }
     return;
   }
@@ -63,10 +63,10 @@ export async function syncSessionService(a: ActiveSession | null, cfg: PomodoroC
   if (!serviceOn) {
     serviceOn = true;
     await safe(() => ForegroundService.requestPermissions());
-    await safe(() => ForegroundService.startForegroundService(opts));
-  } else {
-    await safe(() => ForegroundService.updateForegroundService(opts));
   }
+  // Atualizações também usam "iniciar": o caminho "update" do plugin chama startForegroundService sem
+  // chamar startForeground() depois, e o Android derruba o app por isso. "Iniciar" de novo só troca o texto.
+  await safe(() => ForegroundService.startForegroundService(opts));
 }
 
 /** botões da notificação fixa: 1 = pausar/retomar/pular, 2 = finalizar */

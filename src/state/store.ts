@@ -25,9 +25,9 @@ export interface PersistedState {
 }
 
 export interface RemindersConfig { daily: boolean; time: string; risk: boolean; riskTime: string }
-export interface Prefs { keepAwake: boolean; sound: boolean }
+export interface Prefs { keepAwake: boolean; sound: boolean; /** notificação fixa durante a sessão (Android) */ foreground: boolean }
 export const DEFAULT_REMINDERS: RemindersConfig = { daily: false, time: '19:00', risk: false, riskTime: '21:00' };
-export const DEFAULT_PREFS: Prefs = { keepAwake: true, sound: true };
+export const DEFAULT_PREFS: Prefs = { keepAwake: true, sound: true, foreground: true };
 
 export type Theme = 'auto' | 'claro' | 'escuro';
 

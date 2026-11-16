@@ -110,9 +110,9 @@ function Shell({ election }: { election: Election }) {
   // notificação fixa + alarme do fim da fase
   const phaseKey = active ? `${active.id}|${active.label}|${active.pomo?.phase}|${active.pomo?.blocks}|${active.segments.length}|${active.segments[active.segments.length - 1]?.end ?? 'run'}` : 'none';
   useEffect(() => {
-    void syncSessionService(active, pomodoro, { focusName, rate: active?.rate ?? 0 });
+    void syncSessionService(active, pomodoro, { focusName, rate: active?.rate ?? 0, enabled: prefs.foreground });
     void syncPhaseAlarm(active, pomodoro);
-  }, [phaseKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phaseKey, prefs.foreground]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // botões da notificação (pausar/retomar/pular, finalizar)
   useEffect(() => {

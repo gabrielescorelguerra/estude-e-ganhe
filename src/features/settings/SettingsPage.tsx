@@ -71,6 +71,12 @@ export function SettingsPage({ election }: { election: Election }) {
           <div><b>Som e vibração</b><span className="small muted">Avisa a troca entre foco e pausa.</span></div>
           <label className="switch"><input type="checkbox" checked={prefs.sound} onChange={(e) => setPrefs({ sound: e.target.checked })} /><i /></label>
         </div>
+        {isNative && (
+          <div className="row">
+            <div><b>Notificação fixa durante a sessão</b><span className="small muted">Mantém o cronômetro vivo com a tela apagada e traz os botões Pausar e Finalizar. Desligue se o app fechar sozinho.</span></div>
+            <label className="switch"><input type="checkbox" checked={prefs.foreground} onChange={(e) => setPrefs({ foreground: e.target.checked })} /><i /></label>
+          </div>
+        )}
         <div className="row">
           <div><b>Manter a tela ligada</b><span className="small muted">Durante uma sessão, para o celular não apagar.</span></div>
           <label className="switch"><input type="checkbox" checked={prefs.keepAwake} onChange={(e) => setPrefs({ keepAwake: e.target.checked })} /><i /></label>
